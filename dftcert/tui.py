@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Any
 
 from .hypothesis import draft_hypothesis, policy_coverage
+from .manifest import ArchitectureManifest
 from .policy import Policy
 from .report import sanity_report
 
@@ -54,10 +55,51 @@ def build_hypothesis_report(*, policy: Policy, model_id: str,
     }
 
 
+def load_json_object(path: str | Path) -> dict[str, Any]:
+    value = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError(f"{path} must contain a JSON object")
+    return value
+
+
+def load_json_list(path: str | Path) -> list[dict[str, Any]]:
+    value = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
+        raise ValueError(f"{path} must contain a JSON array of objects")
+    return value
+
+
+def build_artifact_report(
+    *,
+    policy: Policy,
+    manifest_path: str | Path,
+    proof_results_path: str | Path | None = None,
+    certificate_report_path: str | Path | None = None,
+) -> dict[str, Any]:
+    manifest = ArchitectureManifest.load(manifest_path)
+    proof_results = load_json_list(proof_results_path) if proof_results_path else None
+    certificate_report = (
+        load_json_object(certificate_report_path)
+        if certificate_report_path else None
+    )
+    return {
+        "status": "artifact",
+        "manifest": manifest.value,
+        "proof_results": proof_results or [],
+        "certificate_report": certificate_report,
+        "report": sanity_report(
+            manifest=manifest,
+            policy=policy,
+            proof_results=proof_results,
+            certificate_report=certificate_report,
+        ),
+    }
+
+
 def status_color(status: str) -> str:
-    if status == "consistent_with_policy":
+    if status in {"consistent_with_policy", "approved", "verified"}:
         return "good"
-    if status == "violates_required_principle":
+    if status in {"violates_required_principle", "certificate_check_failed", "refuted"}:
         return "bad"
     if status in {"formalization_gap"}:
         return "gap"
@@ -124,6 +166,36 @@ def report_lines(data: dict[str, Any], width: int) -> list[tuple[str, str]]:
         lines.append(("", "muted"))
     lines.append(("TRACE", "title"))
     lines.append((f"manifest: {manifest.get('manifest_sha256', 'draft')}", "muted"))
+    proof_results = data.get("proof_results") or []
+    certificate_report = data.get("certificate_report")
+    if proof_results:
+        lines.append(("", "muted"))
+        lines.append(("PROOF SEARCH ARTIFACTS", "title"))
+        for item in proof_results:
+            lines.append((
+                f"■ {item.get('id', 'unknown')}  [{label(item.get('status'))}]",
+                status_color(str(item.get("status"))),
+            ))
+            winner = item.get("winner")
+            if isinstance(winner, dict) and winner.get("patch"):
+                patch = " ".join(str(winner["patch"]).split())
+                for line in wrap_lines(f"winner: {patch}", width - 2, indent="  "):
+                    lines.append((line, "muted"))
+    if certificate_report:
+        lines.append(("", "muted"))
+        lines.append(("CERTIFICATE CHECK", "title"))
+        cert_status = certificate_report.get("status")
+        lines.append((f"status: {label(cert_status)}", status_color(str(cert_status))))
+        verification = certificate_report.get("certificate_verification", {})
+        if isinstance(verification, dict):
+            lines.append((
+                f"lean check: {label(verification.get('status'))}",
+                status_color(str(verification.get("status"))),
+            ))
+            if verification.get("elapsed_ms") is not None:
+                lines.append((f"elapsed_ms: {verification['elapsed_ms']}", "muted"))
+        if certificate_report.get("report_sha256"):
+            lines.append((f"report: {certificate_report['report_sha256']}", "muted"))
     return lines
 
 
@@ -304,7 +376,11 @@ class TuiApp:
         screen.addstr(height - 5, 3, footer[:left_w - 4], self._attr("title"))
         screen.addstr(height - 4, 3, f"id: {self.model_id}"[:left_w - 4], self._attr("muted"))
 
-        title = "coverage" if self.mode == "coverage" else "sanity report"
+        title = (
+            "coverage" if self.mode == "coverage"
+            else "artifact report" if self.mode == "artifact"
+            else "draft sanity report"
+        )
         self._box(screen, 2, left_w + 2, height - 3, right_w, title)
         source = (
             coverage_lines(self.data, right_w - 4)
@@ -324,6 +400,9 @@ def arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--policy", default=str(DEFAULT_POLICY))
     parser.add_argument("--model-id", default="terminal-hypothesis")
     parser.add_argument("--hypothesis", default=DEFAULT_HYPOTHESIS)
+    parser.add_argument("--manifest")
+    parser.add_argument("--proof-results")
+    parser.add_argument("--certificate-report")
     parser.add_argument("--coverage", action="store_true")
     parser.add_argument(
         "--once", action="store_true",
@@ -341,6 +420,18 @@ def main(argv: list[str] | None = None) -> int:
         if options.once:
             print(render_plain(data, coverage=True, width=options.width))
             return 0
+        mode = "coverage"
+    elif options.manifest:
+        data = build_artifact_report(
+            policy=policy,
+            manifest_path=options.manifest,
+            proof_results_path=options.proof_results,
+            certificate_report_path=options.certificate_report,
+        )
+        if options.once:
+            print(render_plain(data, width=options.width))
+            return 0
+        mode = "artifact"
     else:
         data = build_hypothesis_report(
             policy=policy, model_id=options.model_id,
@@ -349,10 +440,11 @@ def main(argv: list[str] | None = None) -> int:
         if options.once:
             print(render_plain(data, width=options.width))
             return 0
+        mode = "report"
     TuiApp(
         policy=policy, model_id=options.model_id,
         hypothesis=options.hypothesis,
-        mode="coverage" if options.coverage else "report",
+        mode=mode,
         data=data,
     ).run()
     return 0

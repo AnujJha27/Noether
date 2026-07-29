@@ -24,7 +24,7 @@ from dftcert.report import sanity_report
 from dftcert.sandbox import BubblewrapExtractor, SandboxUnavailable
 from dftcert.security import AuditLog, sign_attestation, verify_attestation
 from dftcert.pipeline import LocalPipeline, LocalPipelineConfig, LocalRun
-from dftcert.tui import build_hypothesis_report, render_plain
+from dftcert.tui import build_artifact_report, build_hypothesis_report, render_plain
 from extractors.torch_export_worker import inventory_node
 from orchestrator.providers import MockProvider
 
@@ -221,6 +221,16 @@ class HypothesisIntakeTests(unittest.TestCase):
         self.assertIn("VERDICT", rendered)
         self.assertIn("PRINCIPLE CHECKS", rendered)
         self.assertIn("CLARIFY BEFORE FORMALIZING", rendered)
+
+    def test_terminal_report_can_show_later_stage_artifacts(self):
+        data = build_artifact_report(
+            policy=self.policy,
+            manifest_path=ROOT / "examples/dft/example-manifest.json",
+            proof_results_path=ROOT / "examples/dft/example-proof-results.json",
+        )
+        rendered = render_plain(data, width=88)
+        self.assertIn("PROOF SEARCH ARTIFACTS", rendered)
+        self.assertIn("consistent with policy", rendered.lower())
 
 
 class Pt2Tests(unittest.TestCase):

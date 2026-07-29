@@ -72,6 +72,9 @@ def parser() -> argparse.ArgumentParser:
     tui = commands.add_parser("tui")
     tui.add_argument("--model-id", default="terminal-hypothesis")
     tui.add_argument("--hypothesis")
+    tui.add_argument("--manifest")
+    tui.add_argument("--proof-results")
+    tui.add_argument("--certificate-report")
     tui.add_argument("--coverage", action="store_true")
     tui.add_argument("--once", action="store_true")
     return root
@@ -158,6 +161,12 @@ def main(argv: list[str] | None = None) -> int:
                 "--model-id", options.model_id,
                 "--hypothesis", options.hypothesis or DEFAULT_HYPOTHESIS,
             ]
+            if options.manifest:
+                args.extend(["--manifest", options.manifest])
+            if options.proof_results:
+                args.extend(["--proof-results", options.proof_results])
+            if options.certificate_report:
+                args.extend(["--certificate-report", options.certificate_report])
             if options.coverage:
                 args.append("--coverage")
             if options.once:

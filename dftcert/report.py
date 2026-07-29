@@ -74,6 +74,9 @@ def sanity_report(
             generated_status=generation["status"],
             proof_status=proof_status,
         )
+        reason = obligation["reason"]
+        if proof_status == "verified":
+            reason = "Lean verified a proof for the generated obligation"
         trace = [
             item for item in manifest.value.get("traceability", [])
             if item.get("normalized_claim") == fact
@@ -85,7 +88,7 @@ def sanity_report(
             "principle": policy.obligation_for_fact(fact).description,
             "category": category,
             "assessment_status": obligation["status"],
-            "reason": obligation["reason"],
+            "reason": reason,
             "evidence_kind": obligation["evidence_kind"],
             "normalized_claim": fact_value.get("value"),
             "lean_task_id": task.get("id") if task else None,
