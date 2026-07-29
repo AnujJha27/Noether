@@ -25,6 +25,7 @@ def arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--max-candidates", type=int, default=24)
     parser.add_argument("--agent-parallelism", type=int, default=3)
     parser.add_argument("--verify-parallelism", type=int, default=4)
+    parser.add_argument("--frontier-width", type=int, default=6)
     parser.add_argument("--roles-file", default=str(DEFAULT_ROLES_FILE))
     parser.add_argument("--journal-dir")
     parser.add_argument("--resume-journal", action="store_true")
@@ -54,6 +55,7 @@ def main(argv: list[str] | None = None) -> int:
             max_total_candidates=options.max_candidates,
             max_agent_parallelism=options.agent_parallelism,
             max_parallel_verifications=options.verify_parallelism,
+            frontier_width=options.frontier_width,
             proposer_roles=load_roles(options.roles_file),
         )
     except (ValueError, SystemExit) as error:

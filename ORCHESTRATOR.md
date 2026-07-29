@@ -9,6 +9,19 @@ lineages alive. On the next round, each agent receives one frontier node and
 repairs or extends that exact attempt; another agent can therefore continue
 work started by its predecessor.
 
+The orchestrator now records this as an explicit agentic framework trace:
+
+- `supervisor_decisions`: deterministic per-round decisions, assignments, and
+  budget state;
+- `agent_turns`: one structured turn per proposer role, including inherited
+  node, received handoff, action, status, candidate IDs, and errors;
+- `handoffs`: end-of-round handoff objects from the agent that produced a
+  retained frontier node to the next assigned repair role;
+- `agent_scorecard`: per-agent turns, candidate counts, verifier outcomes, and
+  success rate;
+- optional `subgoals` on a task: a dependency DAG passed into proposer prompts
+  and supervisor state for decomposition-aware search.
+
 The critic influences ordering, but Lean remains the only success oracle.
 Failed attempts with fewer unsolved goals can remain on the frontier, while
 timeouts and worker failures are penalized. Search results include the entire
@@ -141,6 +154,7 @@ Useful CLI controls:
 --max-candidates 24
 --agent-parallelism 3
 --verify-parallelism 4
+--frontier-width 6
 --provider-timeout-s 120
 --roles-file orchestrator/roles.json
 ```

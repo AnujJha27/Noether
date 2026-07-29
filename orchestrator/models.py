@@ -16,6 +16,7 @@ class SearchTask:
     context: str = ""
     parent_attempt_id: str | None = None
     limits: dict[str, int] = field(default_factory=dict)
+    subgoals: list[dict[str, Any]] = field(default_factory=list)
 
     @classmethod
     def from_json(cls, value: dict[str, Any]) -> "SearchTask":
@@ -50,6 +51,41 @@ class SearchTask:
         if parent is not None and (not isinstance(parent, str) or not parent):
             raise ValueError("parent_attempt_id must be a non-empty string")
         context = value.get("context", "")
+        subgoals = value.get("subgoals", [])
+        if not isinstance(subgoals, list):
+            raise ValueError("subgoals must be an array")
+        normalized_subgoals: list[dict[str, Any]] = []
+        seen_subgoals: set[str] = set()
+        for index, subgoal in enumerate(subgoals):
+            if not isinstance(subgoal, dict):
+                raise ValueError(f"subgoals[{index}] must be an object")
+            subgoal_id = subgoal.get("id")
+            statement = subgoal.get("theorem", subgoal.get("statement", ""))
+            depends_on = subgoal.get("depends_on", [])
+            if not isinstance(subgoal_id, str) or not subgoal_id.strip():
+                raise ValueError(f"subgoals[{index}].id must be a non-empty string")
+            if subgoal_id in seen_subgoals:
+                raise ValueError(f"duplicate subgoal id {subgoal_id!r}")
+            if not isinstance(statement, str) or not statement.strip():
+                raise ValueError(f"subgoals[{index}] requires theorem or statement")
+            if not isinstance(depends_on, list) or any(
+                not isinstance(item, str) or not item for item in depends_on
+            ):
+                raise ValueError(f"subgoals[{index}].depends_on must be an array of strings")
+            normalized_subgoals.append({
+                "id": subgoal_id,
+                "theorem": statement,
+                "depends_on": list(depends_on),
+                "context": subgoal.get("context", "") if isinstance(subgoal.get("context", ""), str) else "",
+            })
+            seen_subgoals.add(subgoal_id)
+        for subgoal in normalized_subgoals:
+            missing = set(subgoal["depends_on"]) - seen_subgoals
+            if missing:
+                raise ValueError(
+                    f"subgoal {subgoal['id']!r} depends on unknown subgoals: "
+                    + ", ".join(sorted(missing))
+                )
         module = value["module"]
         project = value["project"]
         if not isinstance(context, str) or not isinstance(project, str):
@@ -59,6 +95,7 @@ class SearchTask:
             module=module, project=project, context=context,
             verification_mode=mode, preamble=preamble,
             parent_attempt_id=parent, limits=limits,
+            subgoals=normalized_subgoals,
         )
 
 
@@ -115,3 +152,50 @@ class SearchNode:
             "score": self.score,
             "depth": self.depth,
         }
+
+
+@dataclass(slots=True)
+class Handoff:
+    id: str
+    round: int
+    from_agent: str
+    to_agent: str
+    node_id: str
+    reason: str
+    state_summary: str
+    accepted: bool = False
+
+    def to_json(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class AgentTurn:
+    id: str
+    round: int
+    agent: str
+    role: str
+    action: str
+    status: str
+    parent_node_id: str | None = None
+    received_handoff_id: str | None = None
+    input_summary: str = ""
+    output_summary: str = ""
+    candidate_ids: list[str] = field(default_factory=list)
+    error: str | None = None
+
+    def to_json(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class SupervisorDecision:
+    id: str
+    round: int
+    action: str
+    reason: str
+    assignments: dict[str, str | None] = field(default_factory=dict)
+    budget_state: dict[str, int] = field(default_factory=dict)
+
+    def to_json(self) -> dict[str, Any]:
+        return asdict(self)

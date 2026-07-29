@@ -7,9 +7,18 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
 
-from .models import Attempt, Candidate, SearchNode, SearchTask
+from .models import (
+    AgentTurn,
+    Attempt,
+    Candidate,
+    Handoff,
+    SearchNode,
+    SearchTask,
+    SupervisorDecision,
+)
 from .frontier import FrontierPolicy, restore_search
 from .providers import LlmProvider, ProviderError
+from .supervisor import AgentAssignment, SupervisorPolicy, agent_scorecard
 from .verifier import VerifierClient, VerifierError
 
 
@@ -86,6 +95,7 @@ class Orchestrator:
         self.verifier = verifier
         self.config = config or SearchConfig()
         self.frontier_policy = FrontierPolicy(self.config.frontier_width)
+        self.supervisor = SupervisorPolicy(list(self.config.proposer_roles))
         self._budget_lock = threading.Lock()
         self._model_calls = 0
 
@@ -126,6 +136,8 @@ class Orchestrator:
             f"Target declaration: {task.target or '(generated statement below)'}\n"
             f"Theorem statement: {task.theorem}\n"
             f"Project context:\n{task.context or '(none supplied)'}\n\n"
+            f"Task decomposition/subgoal DAG:\n"
+            f"{json.dumps(task.subgoals, ensure_ascii=False)}\n\n"
             f"This is search round {round_number}. Strategy: {self.config.proposer_roles[role]}\n"
             f"Previous verified outcomes:\n{json.dumps(history, ensure_ascii=False)}\n\n"
             f"Inherited frontier node:\n{json.dumps(inherited, ensure_ascii=False)}\n"
@@ -139,7 +151,8 @@ class Orchestrator:
 
     def _propose(self, task: SearchTask, role: str, round_number: int,
                  attempts: list[Attempt], parent: SearchNode | None,
-                 frontier: list[SearchNode]) -> tuple[str, SearchNode | None, dict[str, Any] | None, str | None]:
+                 frontier: list[SearchNode],
+                 handoff: Handoff | None) -> tuple[str, SearchNode | None, Handoff | None, dict[str, Any] | None, str | None]:
         system = (
             "You are a Lean 4 proof-search proposer. Generate proof bodies for an external "
             "authoritative Lean checker; do not claim success yourself."
@@ -152,38 +165,63 @@ class Orchestrator:
                 ),
                 schema=PROPOSAL_SCHEMA,
             )
-            return role, parent, response, None
+            return role, parent, handoff, response, None
         except ProviderError as error:
-            return role, parent, None, str(error)
+            return role, parent, handoff, None, str(error)
 
     def _collect_candidates(self, task: SearchTask, round_number: int,
                             attempts: list[Attempt], seen: set[str],
                             events: list[dict[str, Any]],
-                            frontier: list[SearchNode]) -> list[Candidate]:
+                            frontier: list[SearchNode],
+                            assignments: list[AgentAssignment],
+                            turns: list[AgentTurn]) -> list[Candidate]:
         roles = self.config.proposer_roles
-        results: dict[str, tuple[SearchNode | None, dict[str, Any] | None, str | None]] = {}
-        with ThreadPoolExecutor(max_workers=min(self.config.max_agent_parallelism, len(roles))) as pool:
+        results: dict[str, tuple[SearchNode | None, Handoff | None, dict[str, Any] | None, str | None]] = {}
+        with ThreadPoolExecutor(max_workers=min(self.config.max_agent_parallelism, len(assignments))) as pool:
             futures = [
                 pool.submit(
-                    self._propose, task, role, round_number, attempts,
-                    frontier[index % len(frontier)] if frontier else None, frontier,
+                    self._propose, task, assignment.role, round_number, attempts,
+                    assignment.parent, frontier, assignment.handoff,
                 )
-                for index, role in enumerate(roles)
+                for assignment in assignments
             ]
             for future in futures:
-                role, parent, response, error = future.result()
-                results[role] = (parent, response, error)
+                role, parent, handoff, response, error = future.result()
+                results[role] = (parent, handoff, response, error)
         candidates: list[Candidate] = []
         for role in roles:
-            parent, response, error = results[role]
+            parent, handoff, response, error = results[role]
+            turn = AgentTurn(
+                id=f"{task.id}-turn-r{round_number}-{role}",
+                round=round_number,
+                agent=role,
+                role=role,
+                action="propose_proof_patch",
+                status="completed",
+                parent_node_id=parent.id if parent else None,
+                received_handoff_id=handoff.id if handoff else None,
+                input_summary=(
+                    f"inherited {parent.id} with status {parent.status}"
+                    if parent else "root proof search"
+                ),
+            )
             if error:
                 events.append({"type": "provider_error", "round": round_number,
                                "agent": role, "message": error})
+                turn.status = "provider_error"
+                turn.error = error
+                turn.output_summary = "provider did not return candidates"
+                turns.append(turn)
+                events.append({"type": "agent_turn_completed", **turn.to_json()})
                 continue
             raw_candidates = response.get("candidates", []) if isinstance(response, dict) else []
             if not isinstance(raw_candidates, list):
                 events.append({"type": "invalid_agent_output", "round": round_number,
                                "agent": role, "message": "candidates was not an array"})
+                turn.status = "invalid_output"
+                turn.error = "candidates was not an array"
+                turns.append(turn)
+                events.append({"type": "agent_turn_completed", **turn.to_json()})
                 continue
             accepted = 0
             for item in raw_candidates:
@@ -207,9 +245,19 @@ class Orchestrator:
                     parent_node_id=parent.id if parent else None,
                     progress_summary=progress if isinstance(progress, str) else "",
                 ))
+                turn.candidate_ids.append(candidate_id)
                 accepted += 1
                 if len(seen) >= self.config.max_total_candidates:
+                    turn.output_summary = f"accepted {accepted} candidate(s); candidate budget reached"
+                    turns.append(turn)
+                    events.append({"type": "agent_turn_completed", **turn.to_json()})
                     return candidates
+            turn.status = "no_candidates" if accepted == 0 else "completed"
+            turn.output_summary = f"accepted {accepted} candidate(s)"
+            turns.append(turn)
+            if handoff is not None and handoff.accepted:
+                events.append({"type": "handoff_accepted", **handoff.to_json()})
+            events.append({"type": "agent_turn_completed", **turn.to_json()})
         return candidates
 
     def _rank(self, task: SearchTask, candidates: list[Candidate], round_number: int,
@@ -247,6 +295,9 @@ class Orchestrator:
         self._model_calls = 0
         attempts: list[Attempt] = []
         events: list[dict[str, Any]] = list(resume.get("events", [])) if resume else []
+        turns: list[AgentTurn] = []
+        handoffs: list[Handoff] = []
+        supervisor_decisions: list[SupervisorDecision] = []
         seen: set[str] = set()
         winner: Candidate | None = None
         graph_nodes: list[SearchNode] = []
@@ -258,6 +309,24 @@ class Orchestrator:
             frontier = restored.frontier
             seen = restored.seen_patches
             winner = restored.winner
+            for raw in resume.get("agent_turns", []):
+                if isinstance(raw, dict):
+                    try:
+                        turns.append(AgentTurn(**raw))
+                    except TypeError:
+                        pass
+            for raw in resume.get("handoffs", []):
+                if isinstance(raw, dict):
+                    try:
+                        handoffs.append(Handoff(**raw))
+                    except TypeError:
+                        pass
+            for raw in resume.get("supervisor_decisions", []):
+                if isinstance(raw, dict):
+                    try:
+                        supervisor_decisions.append(SupervisorDecision(**raw))
+                    except TypeError:
+                        pass
             events.append({
                 "type": "search_resumed",
                 "node_count": len(graph_nodes),
@@ -272,11 +341,37 @@ class Orchestrator:
         for round_number in range(first_round, first_round + self.config.max_rounds):
             if winner is not None:
                 break
+            decision = self.supervisor.decide(
+                round_number=round_number,
+                model_calls=self._model_calls,
+                max_model_calls=self.config.max_model_calls,
+                seen_candidates=len(seen),
+                max_candidates=self.config.max_total_candidates,
+                winner_present=winner is not None,
+                frontier=frontier,
+                subgoal_count=len(task.subgoals),
+            )
+            supervisor_decisions.append(decision)
+            events.append({"type": "supervisor_decision", **decision.to_json()})
+            if decision.action == "stop":
+                final_status = (
+                    "model_budget_exhausted"
+                    if "model-call" in decision.reason else
+                    "candidate_budget_exhausted"
+                    if "candidate" in decision.reason else
+                    final_status
+                )
+                break
             if len(seen) >= self.config.max_total_candidates:
                 final_status = "candidate_budget_exhausted"
                 break
+            assignments = self.supervisor.assign(
+                round_number=round_number,
+                frontier=frontier,
+                open_handoffs=handoffs,
+            )
             candidates = self._collect_candidates(
-                task, round_number, attempts, seen, events, frontier
+                task, round_number, attempts, seen, events, frontier, assignments, turns
             )
             candidates = self._rank(task, candidates, round_number, events)
             if not candidates:
@@ -348,6 +443,13 @@ class Orchestrator:
                 "type": "frontier_update", "round": round_number,
                 "node_ids": [node.id for node in frontier],
             })
+            new_handoffs = self.supervisor.create_handoffs(
+                round_number=round_number,
+                frontier=[node for node in frontier if node.status != "verified"],
+            )
+            handoffs.extend(new_handoffs)
+            for handoff in new_handoffs:
+                events.append({"type": "handoff_created", **handoff.to_json()})
             if winner:
                 final_status = "verified"
                 break
@@ -356,6 +458,12 @@ class Orchestrator:
             "target": task.target, "rounds_used": max((item.candidate.round for item in attempts), default=0),
             "model_calls": self._model_calls, "unique_candidates": len(seen),
             "attempts": [attempt.to_json() for attempt in attempts], "events": events,
+            "agent_turns": [turn.to_json() for turn in turns],
+            "handoffs": [handoff.to_json() for handoff in handoffs],
+            "supervisor_decisions": [
+                decision.to_json() for decision in supervisor_decisions
+            ],
+            "agent_scorecard": agent_scorecard(turns, attempts),
             "search_graph": {
                 "nodes": [node.to_json() for node in graph_nodes],
                 "frontier": [node.id for node in frontier],

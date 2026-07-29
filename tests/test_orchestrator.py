@@ -38,6 +38,16 @@ class FakeBatchVerifier:
         return self.verify_batch(**request)
 
 
+class CapturingProvider(MockProvider):
+    def __init__(self, responses):
+        super().__init__(responses)
+        self.prompts = []
+
+    def complete(self, *, agent, system, prompt, schema):
+        self.prompts.append({"agent": agent, "prompt": prompt})
+        return super().complete(agent=agent, system=system, prompt=prompt, schema=schema)
+
+
 class ModelTests(unittest.TestCase):
     def test_task_validation(self):
         task = SearchTask.from_json({"id": "x", "target": "A.t", "theorem": "theorem t : True",
@@ -51,6 +61,21 @@ class ModelTests(unittest.TestCase):
             "module": "A", "project": "sample",
         })
         self.assertEqual(generated.target, "")
+        decomposed = SearchTask.from_json({
+            "id": "d", "target": "A.t", "theorem": "theorem t : True",
+            "module": "A", "project": "sample",
+            "subgoals": [
+                {"id": "lemma-a", "theorem": "theorem a : True"},
+                {"id": "lemma-b", "statement": "theorem b : True", "depends_on": ["lemma-a"]},
+            ],
+        })
+        self.assertEqual(len(decomposed.subgoals), 2)
+        with self.assertRaises(ValueError):
+            SearchTask.from_json({
+                "id": "bad", "target": "A.t", "theorem": "theorem t : True",
+                "module": "A", "project": "sample",
+                "subgoals": [{"id": "b", "theorem": "theorem b : True", "depends_on": ["missing"]}],
+            })
 
 
 class ProviderTests(unittest.TestCase):
@@ -168,6 +193,65 @@ class EngineTests(unittest.TestCase):
             if node["candidate"]["agent"] == "successor"
         ]
         self.assertEqual(resumed[0]["parent_id"], first["search_graph"]["frontier"][0])
+
+    def test_agentic_trace_records_turns_supervisor_handoffs_and_scorecard(self):
+        provider = MockProvider([
+            {"candidates": [{"patch": "bad-direct"}]},
+            {"candidates": [{"patch": "bad-auto"}]},
+            {"ordered_ids": ["search-r1-direct-1", "search-r1-automation-1"]},
+        ])
+        verifier = FakeBatchVerifier()
+        config = SearchConfig(
+            max_rounds=1,
+            proposer_roles={"direct": "d", "automation": "a"},
+            max_agent_parallelism=2,
+        )
+        result = Orchestrator(provider, verifier, config).search(self.task())
+        self.assertEqual(result["status"], "exhausted")
+        self.assertEqual(len(result["agent_turns"]), 2)
+        self.assertTrue(result["supervisor_decisions"])
+        self.assertTrue(any(event["type"] == "handoff_created" for event in result["events"]))
+        self.assertIn("direct", result["agent_scorecard"])
+        self.assertGreaterEqual(result["agent_scorecard"]["direct"]["candidate_count"], 1)
+
+    def test_resume_accepts_prior_handoff_as_next_turn_input(self):
+        first = Orchestrator(
+            MockProvider([{"candidates": [{"patch": "bad"}]}]),
+            FakeBatchVerifier(),
+            SearchConfig(max_rounds=1, proposer_roles={"first": "try", "second": "repair"}),
+        ).search(self.task())
+        self.assertTrue(first["handoffs"])
+        second = Orchestrator(
+            MockProvider([{"candidates": [{"patch": "good"}]}, {"candidates": []}]),
+            FakeBatchVerifier(),
+            SearchConfig(max_rounds=1, proposer_roles={"first": "try", "second": "repair"}),
+        ).search(self.task(), resume=first)
+        received = [
+            turn for turn in second["agent_turns"]
+            if turn.get("received_handoff_id")
+        ]
+        self.assertTrue(received)
+
+    def test_subgoal_dag_is_visible_to_agents_and_supervisor(self):
+        provider = CapturingProvider([
+            {"candidates": [{"patch": "good"}]},
+        ])
+        verifier = FakeBatchVerifier()
+        config = SearchConfig(max_rounds=1, proposer_roles={"direct": "d"})
+        task = SearchTask.from_json({
+            "id": "decomposed", "target": "A.t",
+            "theorem": "theorem t : True", "module": "A", "project": "sample",
+            "subgoals": [
+                {"id": "lemma-a", "theorem": "theorem a : True"},
+                {"id": "lemma-b", "theorem": "theorem b : True", "depends_on": ["lemma-a"]},
+            ],
+        })
+        result = Orchestrator(provider, verifier, config).search(task)
+        self.assertEqual(result["status"], "verified")
+        self.assertIn("lemma-a", provider.prompts[0]["prompt"])
+        self.assertEqual(
+            result["supervisor_decisions"][0]["budget_state"]["subgoal_count"], 2
+        )
 
 
 if __name__ == "__main__":
