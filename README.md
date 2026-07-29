@@ -97,11 +97,10 @@ Draft a physicist-facing sanity report from a hypothesis:
 make sanity-demo
 ```
 
-Run the local web UI:
+Run the terminal UI:
 
 ```bash
-make web
-# open http://127.0.0.1:8765
+make tui
 ```
 
 ## Runtime limits

@@ -78,15 +78,9 @@ Inspect the policy coverage map:
 python3 -m dftcert.cli coverage
 ```
 
-Run a local web UI:
-
-```bash
-proof-vibe web
-```
-
-The UI and `hypothesis-draft` are intake tools. They do not prove claims and do
-not replace the explicit confirmation, obligation generation, proof-search, and
-certificate-check stages.
+The TUI and `hypothesis-draft` are intake tools. They do not prove claims and
+do not replace the explicit confirmation, obligation generation, proof-search,
+and certificate-check stages.
 
 Create a draft manually:
 

@@ -24,6 +24,7 @@ from dftcert.report import sanity_report
 from dftcert.sandbox import BubblewrapExtractor, SandboxUnavailable
 from dftcert.security import AuditLog, sign_attestation, verify_attestation
 from dftcert.pipeline import LocalPipeline, LocalPipelineConfig, LocalRun
+from dftcert.tui import build_hypothesis_report, render_plain
 from extractors.torch_export_worker import inventory_node
 from orchestrator.providers import MockProvider
 
@@ -209,6 +210,17 @@ class HypothesisIntakeTests(unittest.TestCase):
         self.assertTrue(any(
             "trained-weight" in item for item in coverage["not_supported"]
         ))
+
+    def test_terminal_report_is_readable_without_curses(self):
+        data = build_hypothesis_report(
+            policy=self.policy,
+            model_id="terminal",
+            hypothesis="The architecture is nonlocal but does not specify self-adjointness.",
+        )
+        rendered = render_plain(data, width=88)
+        self.assertIn("VERDICT", rendered)
+        self.assertIn("PRINCIPLE CHECKS", rendered)
+        self.assertIn("CLARIFY BEFORE FORMALIZING", rendered)
 
 
 class Pt2Tests(unittest.TestCase):

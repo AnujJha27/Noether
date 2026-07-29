@@ -49,16 +49,19 @@ Expected result:
 - `make sanity-demo` writes a draft hypothesis manifest and report under
   `build/`.
 
-## Local web UI
+## Terminal UI
 
 Run:
 
 ```bash
-make web
+make tui
 ```
 
-Then open `http://127.0.0.1:8765`. The web UI is local-only by default and uses
-the same policy coverage and hypothesis-draft logic as the CLI.
+For a non-interactive terminal report:
+
+```bash
+python3 -m dftcert.tui --once
+```
 
 ## DFT certificate example
 
