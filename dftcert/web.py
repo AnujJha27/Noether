@@ -337,10 +337,27 @@ HTML = """<!doctype html>
     .cards { display: grid; gap: 0.75rem; }
     .obligation {
       border: 1px solid var(--line);
+      border-left: 5px solid var(--line);
       border-radius: 6px;
       background: var(--panel-strong);
       padding: 0.9rem;
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
+    }
+    .obligation.good {
+      border-left-color: var(--good);
+      background: linear-gradient(90deg, rgba(167, 243, 208, 0.08), var(--panel-strong) 30%);
+    }
+    .obligation.warn {
+      border-left-color: var(--warn);
+      background: linear-gradient(90deg, rgba(234, 179, 8, 0.08), var(--panel-strong) 30%);
+    }
+    .obligation.bad {
+      border-left-color: var(--bad);
+      background: linear-gradient(90deg, rgba(251, 113, 133, 0.10), var(--panel-strong) 30%);
+    }
+    .obligation.gap {
+      border-left-color: var(--gap);
+      background: linear-gradient(90deg, rgba(216, 180, 254, 0.09), var(--panel-strong) 30%);
     }
     .obligation-top {
       display: flex;
@@ -362,6 +379,31 @@ HTML = """<!doctype html>
     .tag.warn { background: rgba(251, 191, 36, 0.14); color: var(--warn); }
     .tag.bad { background: rgba(251, 113, 133, 0.14); color: var(--bad); }
     .tag.gap { background: rgba(192, 132, 252, 0.14); color: var(--gap); }
+    .legend {
+      display: flex;
+      gap: 0.45rem;
+      flex-wrap: wrap;
+      margin-top: 0.7rem;
+    }
+    .legend span {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.35rem;
+      color: var(--muted);
+      font-size: 0.78rem;
+      font-weight: 750;
+    }
+    .dot {
+      width: 0.62rem;
+      height: 0.62rem;
+      border-radius: 999px;
+      display: inline-block;
+      background: var(--line);
+    }
+    .dot.good { background: var(--good); }
+    .dot.warn { background: var(--warn); }
+    .dot.bad { background: var(--bad); }
+    .dot.gap { background: var(--gap); }
     .principle { margin-top: 0.35rem; color: var(--muted); }
     .detail-grid {
       display: grid;
@@ -502,6 +544,12 @@ HTML = """<!doctype html>
             <div>
               <h2>Principle checks</h2>
               <p>Each row maps a physics principle to evidence, generated Lean tasks, and current status.</p>
+              <div class="legend">
+                <span><i class="dot good"></i>proved/consistent</span>
+                <span><i class="dot warn"></i>needs proof or input</span>
+                <span><i class="dot gap"></i>formalization gap</span>
+                <span><i class="dot bad"></i>contradiction</span>
+              </div>
             </div>
           </div>
           <div id="obligations" class="cards"><div class="empty">No report yet.</div></div>
@@ -518,11 +566,11 @@ HTML = """<!doctype html>
         <div class="section">
           <div class="section-head">
             <div>
-              <h2>Assumption ledger</h2>
-              <p>What the system extracted, what source it came from, and whether it needs review.</p>
+              <h2>Open issues</h2>
+              <p>Only unresolved or missing assumptions appear here. Extracted claims are shown inside the principle cards above.</p>
             </div>
           </div>
-          <div id="assumptions" class="list"><div class="empty">No assumptions yet.</div></div>
+          <div id="assumptions" class="list"><div class="empty">No open issues yet.</div></div>
         </div>
         <div class="section">
           <details>
@@ -575,6 +623,15 @@ function statusClass(status) {
   if (status === "inconclusive_missing_assumption" || status === "proof_required") return "warn";
   return "";
 }
+function issueAssumptions(report) {
+  const categories = new Set(["needs_clarification", "missing", "unresolved"]);
+  const problemFacts = new Set((report.obligations || [])
+    .filter((item) => ["inconclusive_missing_assumption", "violates_required_principle"].includes(item.category))
+    .map((item) => item.fact));
+  return (report.assumptions || []).filter((item) =>
+    categories.has(item.status) || item.source === "missing" || problemFacts.has(item.id)
+  );
+}
 function label(value) {
   return String(value ?? "unknown").replaceAll("_", " ");
 }
@@ -603,8 +660,13 @@ function renderReport(data) {
   document.getElementById("metricClaims").textContent = manifest.hypothesis_intake?.extracted_claim_count ?? Object.keys(manifest.facts || {}).length;
   document.getElementById("metricQuestions").textContent = (report.clarification_questions || []).length;
   document.getElementById("metricObligations").textContent = (report.obligations || []).length;
-  renderList("obligations", report.obligations || [], (item) => `
-    <article class="obligation">
+  renderList("obligations", report.obligations || [], (item) => {
+    const cls = statusClass(item.category);
+    const claimText = item.normalized_claim
+      ? shortJson(item.normalized_claim)
+      : "No claim supplied";
+    return `
+    <article class="obligation ${cls}">
       <div class="obligation-top">
         <div>
           <h3>${escapeHtml(item.fact)}</h3>
@@ -619,11 +681,11 @@ function renderReport(data) {
         <div class="mini"><b>Proof status</b><code>${escapeHtml(item.proof_status || "not run")}</code></div>
       </div>
       <div class="detail-grid">
-        <div class="mini"><b>Normalized claim</b><code>${escapeHtml(shortJson(item.normalized_claim))}</code></div>
+        <div class="mini"><b>Extracted claim</b><code>${escapeHtml(claimText)}</code></div>
         <div class="mini"><b>Reason</b>${escapeHtml(item.reason)}</div>
       </div>
     </article>
-  `, "No principle checks available.");
+  `}, "No principle checks available.");
   renderList("questions", report.clarification_questions || [], (item) => `
     <div class="list-item">
       <strong>${escapeHtml(item.fact || "clarification")}</strong>
@@ -631,13 +693,14 @@ function renderReport(data) {
       <p><small>${escapeHtml(item.reason || "")}</small></p>
     </div>
   `, "No clarifying questions.");
-  renderList("assumptions", report.assumptions || [], (item) => `
+  const openIssues = issueAssumptions(report);
+  renderList("assumptions", openIssues, (item) => `
     <div class="list-item">
       <strong>${escapeHtml(item.id)}</strong> <span class="tag">${escapeHtml(label(item.status))}</span>
       <p>${escapeHtml(item.statement)}</p>
       <p><small>Source: ${escapeHtml(label(item.source))}</small></p>
     </div>
-  `, "No assumptions recorded.");
+  `, "No unresolved assumptions. Extracted claims are visible on their principle cards.");
   document.getElementById("rawJson").textContent = JSON.stringify(data, null, 2);
 }
 function renderCoverage(data) {
@@ -650,7 +713,7 @@ function renderCoverage(data) {
   document.getElementById("metricQuestions").textContent = data.not_supported.length;
   document.getElementById("metricObligations").textContent = data.formalization_profiles.length;
   renderList("obligations", data.supported_claims, (item) => `
-    <article class="obligation">
+    <article class="obligation good">
       <div class="obligation-top">
         <div>
           <h3>${escapeHtml(item.fact)}</h3>
