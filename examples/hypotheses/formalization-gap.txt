@@ -1,0 +1,2 @@
+The hypothesis proposes a rotationally equivariant DFT architecture with
+self-adjoint Fourier-space kernels and a long-range nonlocal receptive field.

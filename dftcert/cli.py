@@ -13,10 +13,12 @@ from .analysis import analyze_inventory
 from .assembly import AssemblyError, assemble_certificate, load_proof_results
 from .english import interpret_english
 from .extraction import apply_extraction_result
+from .hypothesis import draft_hypothesis, policy_coverage
 from .manifest import ArchitectureManifest, ManifestError
 from .obligations import generate_obligations
 from .policy import Policy, PolicyError
 from .pt2 import inspect_pt2, pending_manifest
+from .report import sanity_report
 from .sandbox import BubblewrapExtractor, ExtractionFailed, SandboxUnavailable
 from orchestrator.providers import CommandProvider
 
@@ -37,6 +39,13 @@ def parser() -> argparse.ArgumentParser:
     commands = root.add_subparsers(dest="command", required=True)
 
     commands.add_parser("policy-check")
+    commands.add_parser("coverage")
+
+    hypothesis = commands.add_parser("hypothesis-draft")
+    hypothesis.add_argument("--model-id", required=True)
+    hypothesis.add_argument("--hypothesis", required=True)
+    hypothesis.add_argument("--output", required=True)
+    hypothesis.add_argument("--report-output")
 
     draft = commands.add_parser("english-draft")
     draft.add_argument("--model-id", required=True)
@@ -93,6 +102,12 @@ def parser() -> argparse.ArgumentParser:
     assess = commands.add_parser("assess")
     assess.add_argument("--manifest", required=True)
 
+    report = commands.add_parser("sanity-report")
+    report.add_argument("--manifest", required=True)
+    report.add_argument("--proof-results")
+    report.add_argument("--certificate-report")
+    report.add_argument("--output")
+
     generate = commands.add_parser("generate-obligations")
     generate.add_argument("--manifest", required=True)
     generate.add_argument("--output")
@@ -126,6 +141,28 @@ def main(argv: list[str] | None = None) -> int:
         if options.command == "policy-check":
             output = {"status": "ok", "policy": policy.id, "version": policy.version,
                       "required_facts": policy.required_facts}
+        elif options.command == "coverage":
+            output = {"status": "ok", **policy_coverage(policy)}
+        elif options.command == "hypothesis-draft":
+            manifest = draft_hypothesis(
+                model_id=options.model_id, hypothesis=options.hypothesis,
+                policy=policy,
+            )
+            manifest.write(options.output)
+            output = {
+                "status": "draft",
+                "output": str(Path(options.output).resolve()),
+                "manifest_sha256": manifest.value["manifest_sha256"],
+                "extracted_claim_count": manifest.value["hypothesis_intake"]["extracted_claim_count"],
+                "clarification_questions": manifest.value["clarification_questions"],
+            }
+            if options.report_output:
+                report = sanity_report(manifest=manifest, policy=policy)
+                Path(options.report_output).write_text(
+                    json.dumps(report, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                output["report"] = str(Path(options.report_output).resolve())
         elif options.command == "english-draft":
             proposed = json_object(options.proposed_facts) if options.proposed_facts else {}
             manifest = ArchitectureManifest.english_draft(
@@ -218,6 +255,26 @@ def main(argv: list[str] | None = None) -> int:
         elif options.command == "assess":
             manifest = ArchitectureManifest.load(options.manifest)
             output = assess_manifest(manifest, policy)
+        elif options.command == "sanity-report":
+            proof_results = (
+                load_proof_results(options.proof_results)
+                if options.proof_results else None
+            )
+            certificate_report = (
+                json_object(options.certificate_report)
+                if options.certificate_report else None
+            )
+            output = sanity_report(
+                manifest=ArchitectureManifest.load(options.manifest),
+                policy=policy,
+                proof_results=proof_results,
+                certificate_report=certificate_report,
+            )
+            if options.output:
+                Path(options.output).write_text(
+                    json.dumps(output, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
         elif options.command == "generate-obligations":
             output = generate_obligations(
                 ArchitectureManifest.load(options.manifest), policy
@@ -279,6 +336,9 @@ def main(argv: list[str] | None = None) -> int:
             "ok", "draft", "confirmed", "valid_container", "extraction_pending",
             "extracted", "extracted_partial", "verified", "not_approved", "approved",
             "extracted_inventory",
+            "consistent_with_policy", "violates_required_principle",
+            "formalization_gap", "inconclusive_missing_assumption",
+            "proof_required",
             "obligations_generated", "formalization_required",
             "assembled_pending_certificate_check",
         } else 1

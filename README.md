@@ -91,6 +91,19 @@ make wsl-smoke
 
 For a clean reproduction checklist, see [REPRODUCIBILITY.md](REPRODUCIBILITY.md).
 
+Draft a physicist-facing sanity report from a hypothesis:
+
+```bash
+make sanity-demo
+```
+
+Run the local web UI:
+
+```bash
+make web
+# open http://127.0.0.1:8765
+```
+
 ## Runtime limits
 
 Jobs use process groups plus wall-clock, CPU (`RLIMIT_CPU`), and virtual address-space (`RLIMIT_AS`) limits. Lean 4.31 reserves substantial virtual address space at startup, so the local defaults are 15 seconds and 4096 MB; clients can override all values in the request's `limits` object. Deterministic `verified` and `lean_error` results are cached; resource and worker failures are not.

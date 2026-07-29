@@ -1,0 +1,3 @@
+A DFT architecture with an XC derivative discontinuity at an electron-number
+boundary, nonlocal spatial coupling, and a self-adjoint learned self-energy
+operator.

@@ -68,6 +68,10 @@ def parser() -> argparse.ArgumentParser:
 
     status = commands.add_parser("status")
     status.add_argument("run_dir")
+
+    web = commands.add_parser("web")
+    web.add_argument("--host", default="127.0.0.1")
+    web.add_argument("--port", type=int, default=8765)
     return root
 
 
@@ -145,6 +149,13 @@ def main(argv: list[str] | None = None) -> int:
             state = LocalPipeline(
                 run=run, policy=policy, config=config
             ).resume()
+        elif options.command == "web":
+            from .web import main as web_main
+            return web_main([
+                "--policy", options.policy,
+                "--host", options.host,
+                "--port", str(options.port),
+            ])
         else:
             run = LocalRun(options.run_dir)
             config = LocalPipelineConfig(

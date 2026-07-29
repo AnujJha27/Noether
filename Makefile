@@ -17,7 +17,7 @@ BENCH_SRC := src/benchmark.cpp $(CORE_SRC)
 
 .PHONY: all test benchmark benchmark-repeat clean lean orchestrator-test dftcert-test dftcert-example \
 	dftcert-obligations dftcert-assemble-example dftcert-certify-example \
-	dftcert-search-example wsl-smoke
+	dftcert-search-example sanity-demo web wsl-smoke
 
 all: $(BUILD)/proof-search
 
@@ -83,6 +83,17 @@ dftcert-search-example: $(BUILD)/proof-search
 	  PROOF_SEARCH_DB="$(BUILD)/dft-proof-search.db" \
 	  python3 -m orchestrator.cli --provider command \
 	    --llm-command "$(LLM_COMMAND)" --verifier ./build/proof-search
+
+sanity-demo:
+	mkdir -p $(BUILD)
+	python3 -m dftcert.cli hypothesis-draft \
+	  --model-id demo-hypothesis \
+	  --hypothesis "$$(cat examples/hypotheses/pass.txt)" \
+	  --output build/demo-hypothesis-manifest.json \
+	  --report-output build/demo-sanity-report.json
+
+web:
+	python3 -m dftcert.web
 
 test: $(BUILD)/proof-search $(BUILD)/tests lean orchestrator-test dftcert-test
 	$(BUILD)/tests

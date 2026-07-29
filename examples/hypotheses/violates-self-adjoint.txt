@@ -1,0 +1,2 @@
+The architecture has an XC derivative discontinuity and nonlocal coupling, but
+the learned self-energy operator is explicitly non-self-adjoint.

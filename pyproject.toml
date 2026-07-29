@@ -21,6 +21,7 @@ classifiers = [
 [project.scripts]
 proof-vibe-dftcert = "dftcert.cli:main"
 proof-vibe-orchestrator = "orchestrator.cli:main"
+proof-vibe-web = "dftcert.web:main"
 
 [tool.setuptools]
 packages = ["dftcert", "orchestrator", "extractors"]

@@ -1,0 +1,2 @@
+The proposed model is nonlocal and uses message passing to propagate density
+information across sites.

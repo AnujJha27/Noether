@@ -15,10 +15,12 @@ from dftcert.assembly import AssemblyError, assemble_certificate
 from dftcert.context import ContextError, WorkerContextRegistry
 from dftcert.english import interpret_english
 from dftcert.extraction import apply_extraction_result
+from dftcert.hypothesis import draft_hypothesis, policy_coverage
 from dftcert.manifest import ArchitectureManifest, ManifestError
 from dftcert.obligations import generate_obligations
 from dftcert.policy import Policy, PolicyError
 from dftcert.pt2 import inspect_pt2, pending_manifest
+from dftcert.report import sanity_report
 from dftcert.sandbox import BubblewrapExtractor, SandboxUnavailable
 from dftcert.security import AuditLog, sign_attestation, verify_attestation
 from dftcert.pipeline import LocalPipeline, LocalPipelineConfig, LocalRun
@@ -140,6 +142,73 @@ class EnglishInterpreterTests(unittest.TestCase):
         self.assertEqual(manifest.value["unresolved_facts"], [
             "xc_discontinuity_compatible", "spatial_nonlocality_compatible"
         ])
+
+
+class HypothesisIntakeTests(unittest.TestCase):
+    def setUp(self):
+        self.policy = Policy.load(POLICY_PATH)
+
+    def test_hypothesis_draft_records_assumptions_and_traceability(self):
+        manifest = draft_hypothesis(
+            model_id="front-facing",
+            hypothesis=(
+                "A DFT architecture with an XC derivative discontinuity, "
+                "nonlocal coupling, and a self-adjoint learned operator."
+            ),
+            policy=self.policy,
+        )
+        self.assertEqual(manifest.value["status"], "draft")
+        self.assertEqual(
+            manifest.value["hypothesis_intake"]["extracted_claim_count"], 3
+        )
+        self.assertTrue(manifest.value["assumptions"])
+        self.assertTrue(manifest.value["traceability"])
+        self.assertTrue(any(
+            question["fact"] == "architecture_ir"
+            for question in manifest.value["clarification_questions"]
+        ))
+        self.assertTrue(all(
+            fact["evidence"]["kind"] == "unconfirmed_interpretation"
+            for fact in manifest.value["facts"].values()
+        ))
+
+    def test_missing_assumption_becomes_clarifying_question(self):
+        manifest = draft_hypothesis(
+            model_id="missing",
+            hypothesis="The architecture has nonlocal message passing.",
+            policy=self.policy,
+        )
+        facts = set(manifest.value["facts"])
+        self.assertEqual(facts, {"spatial_nonlocality_compatible"})
+        questions = {
+            question["fact"] for question in manifest.value["clarification_questions"]
+        }
+        self.assertIn("self_adjoint", questions)
+        self.assertIn("xc_discontinuity_compatible", questions)
+
+    def test_sanity_report_distinguishes_refutation_from_formalization_gap(self):
+        manifest = draft_hypothesis(
+            model_id="bad",
+            hypothesis=(
+                "The model has an XC derivative discontinuity and nonlocal "
+                "coupling but is explicitly non-self-adjoint."
+            ),
+            policy=self.policy,
+        )
+        report = sanity_report(manifest=manifest, policy=self.policy)
+        self.assertEqual(report["status"], "violates_required_principle")
+        categories = {
+            item["fact"]: item["category"] for item in report["obligations"]
+        }
+        self.assertEqual(categories["self_adjoint"], "violates_required_principle")
+
+    def test_policy_coverage_lists_supported_and_unsupported_scope(self):
+        coverage = policy_coverage(self.policy)
+        self.assertEqual(coverage["policy"]["id"], "dft-architecture-v1")
+        self.assertEqual(len(coverage["supported_claims"]), 3)
+        self.assertTrue(any(
+            "trained-weight" in item for item in coverage["not_supported"]
+        ))
 
 
 class Pt2Tests(unittest.TestCase):

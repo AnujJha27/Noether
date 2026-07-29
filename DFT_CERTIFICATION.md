@@ -59,6 +59,35 @@ manifest hash, or final certificate statement.
 
 ## English workflow
 
+For a front-facing sanity-check workflow, start with a hypothesis draft. This
+extracts reviewable claims, records assumptions and traceability, asks
+clarifying questions, and writes a report without treating the interpretation
+as authoritative:
+
+```bash
+python3 -m dftcert.cli hypothesis-draft \
+  --model-id my-hypothesis \
+  --hypothesis "A DFT architecture with an XC derivative discontinuity, nonlocal coupling, and a self-adjoint operator." \
+  --output build/my-hypothesis-draft.json \
+  --report-output build/my-hypothesis-report.json
+```
+
+Inspect the policy coverage map:
+
+```bash
+python3 -m dftcert.cli coverage
+```
+
+Run a local web UI:
+
+```bash
+proof-vibe web
+```
+
+The UI and `hypothesis-draft` are intake tools. They do not prove claims and do
+not replace the explicit confirmation, obligation generation, proof-search, and
+certificate-check stages.
+
 Create a draft manually:
 
 ```bash

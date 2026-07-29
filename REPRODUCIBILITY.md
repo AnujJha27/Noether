@@ -35,6 +35,7 @@ make test
 make wsl-smoke
 make benchmark
 make benchmark-repeat
+make sanity-demo
 ```
 
 Expected result:
@@ -45,6 +46,19 @@ Expected result:
 - `make benchmark` writes `benchmark-results.json`.
 - `make benchmark-repeat` writes `benchmark-repeat-results.json` with
   run-to-run variance.
+- `make sanity-demo` writes a draft hypothesis manifest and report under
+  `build/`.
+
+## Local web UI
+
+Run:
+
+```bash
+make web
+```
+
+Then open `http://127.0.0.1:8765`. The web UI is local-only by default and uses
+the same policy coverage and hypothesis-draft logic as the CLI.
 
 ## DFT certificate example
 
