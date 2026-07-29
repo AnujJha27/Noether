@@ -23,20 +23,44 @@ HTML = """<!doctype html>
   <title>Proof Vibe sanity check</title>
   <style>
     :root {
+      color-scheme: dark;
+      --bg: #070914;
+      --bg-2: #0d1224;
+      --panel: rgba(15, 23, 42, 0.74);
+      --panel-strong: rgba(17, 24, 39, 0.92);
+      --panel-soft: rgba(30, 41, 59, 0.72);
+      --ink: #f5f7fb;
+      --muted: #9aa7bd;
+      --line: rgba(148, 163, 184, 0.22);
+      --brand: #7c3aed;
+      --brand-2: #06b6d4;
+      --brand-dark: #4f46e5;
+      --good: #34d399;
+      --warn: #fbbf24;
+      --bad: #fb7185;
+      --gap: #c084fc;
+      --shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
+      --glow: 0 0 34px rgba(124, 58, 237, 0.35);
+    }
+    body.light {
       color-scheme: light;
       --bg: #f5f7fb;
-      --panel: #ffffff;
+      --bg-2: #eef3fb;
+      --panel: rgba(255, 255, 255, 0.86);
+      --panel-strong: rgba(255, 255, 255, 0.96);
       --panel-soft: #f8fafc;
       --ink: #172033;
       --muted: #667085;
       --line: #d9e1ee;
       --brand: #335cff;
+      --brand-2: #0891b2;
       --brand-dark: #243fd1;
       --good: #047857;
       --warn: #b45309;
       --bad: #b42318;
       --gap: #6d28d9;
       --shadow: 0 18px 48px rgba(16, 24, 40, 0.10);
+      --glow: 0 0 30px rgba(51, 92, 255, 0.16);
     }
     * { box-sizing: border-box; }
     body {
@@ -45,9 +69,30 @@ HTML = """<!doctype html>
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       color: var(--ink);
       background:
-        radial-gradient(circle at top left, rgba(51, 92, 255, 0.16), transparent 34rem),
-        linear-gradient(180deg, #fbfcff 0%, var(--bg) 45%, #eef3fb 100%);
+        radial-gradient(circle at 12% 5%, rgba(124, 58, 237, 0.32), transparent 30rem),
+        radial-gradient(circle at 88% 8%, rgba(6, 182, 212, 0.22), transparent 28rem),
+        radial-gradient(circle at 50% 100%, rgba(79, 70, 229, 0.16), transparent 34rem),
+        linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 54%, #080b16 100%);
       line-height: 1.45;
+      overflow-x: hidden;
+    }
+    body.light {
+      background:
+        radial-gradient(circle at 12% 5%, rgba(51, 92, 255, 0.16), transparent 34rem),
+        radial-gradient(circle at 88% 8%, rgba(8, 145, 178, 0.14), transparent 30rem),
+        linear-gradient(180deg, #fbfcff 0%, var(--bg) 45%, var(--bg-2) 100%);
+    }
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: 0.38;
+      background-image:
+        linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
+      background-size: 44px 44px;
+      mask-image: radial-gradient(circle at 50% 10%, black, transparent 72%);
     }
     header {
       max-width: 1180px;
@@ -64,6 +109,18 @@ HTML = """<!doctype html>
       font-size: clamp(2.3rem, 5vw, 4.8rem);
       line-height: 0.95;
       letter-spacing: -0.065em;
+      background: linear-gradient(135deg, #ffffff 5%, #a5b4fc 38%, #67e8f9 72%, #f0abfc 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      text-shadow: 0 18px 80px rgba(124, 58, 237, 0.36);
+    }
+    body.light h1 {
+      background: linear-gradient(135deg, #172033 5%, #335cff 48%, #0891b2 100%);
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      text-shadow: none;
     }
     h2, h3 { margin: 0; letter-spacing: -0.02em; }
     p { margin: 0; }
@@ -72,6 +129,29 @@ HTML = """<!doctype html>
       grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
       gap: 1rem;
       align-items: end;
+      position: relative;
+    }
+    .brand-lockup {
+      display: flex;
+      gap: 1rem;
+      align-items: center;
+    }
+    .mark {
+      width: 64px;
+      height: 64px;
+      flex: 0 0 auto;
+      border-radius: 22px;
+      display: grid;
+      place-items: center;
+      color: white;
+      background:
+        linear-gradient(135deg, rgba(124, 58, 237, 0.95), rgba(6, 182, 212, 0.88)),
+        radial-gradient(circle at top left, white, transparent);
+      box-shadow: var(--glow), inset 0 1px 0 rgba(255,255,255,0.34);
+      border: 1px solid rgba(255,255,255,0.20);
+      font-weight: 950;
+      font-size: 1.35rem;
+      letter-spacing: -0.08em;
     }
     .subtitle {
       margin-top: 1rem;
@@ -87,12 +167,13 @@ HTML = """<!doctype html>
       padding: 0.42rem 0.72rem;
       border: 1px solid var(--line);
       border-radius: 999px;
-      background: rgba(255,255,255,0.78);
-      color: #344054;
+      background: rgba(15, 23, 42, 0.62);
+      color: var(--ink);
       font-size: 0.86rem;
       font-weight: 650;
       backdrop-filter: blur(10px);
     }
+    body.light .pill { background: rgba(255,255,255,0.78); color: #344054; }
     .layout {
       display: grid;
       grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.45fr);
@@ -100,18 +181,29 @@ HTML = """<!doctype html>
       align-items: start;
     }
     .panel {
-      background: rgba(255,255,255,0.86);
-      border: 1px solid rgba(217,225,238,0.9);
+      background: var(--panel);
+      border: 1px solid var(--line);
       border-radius: 24px;
       box-shadow: var(--shadow);
-      backdrop-filter: blur(12px);
+      backdrop-filter: blur(18px);
+      position: relative;
+      overflow: hidden;
     }
+    .panel::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(135deg, rgba(255,255,255,0.10), transparent 34%);
+      opacity: 0.72;
+    }
+    .panel > * { position: relative; }
     .composer { padding: 1.1rem; position: sticky; top: 1rem; }
     .field { margin-top: 1rem; }
     label {
       display: block;
       margin-bottom: 0.42rem;
-      color: #344054;
+      color: var(--ink);
       font-size: 0.86rem;
       font-weight: 750;
     }
@@ -119,12 +211,14 @@ HTML = """<!doctype html>
       width: 100%;
       border: 1px solid var(--line);
       border-radius: 16px;
-      background: #fff;
+      background: rgba(2, 6, 23, 0.48);
       color: var(--ink);
       font: inherit;
       outline: none;
       transition: border-color 140ms ease, box-shadow 140ms ease;
     }
+    body.light input, body.light textarea { background: #fff; }
+    textarea::placeholder, input::placeholder { color: #64748b; }
     input { padding: 0.82rem 0.9rem; }
     textarea {
       min-height: 230px;
@@ -148,13 +242,21 @@ HTML = """<!doctype html>
     button:hover { transform: translateY(-1px); }
     .primary {
       color: white;
-      background: linear-gradient(135deg, var(--brand), var(--brand-dark));
-      box-shadow: 0 10px 24px rgba(51, 92, 255, 0.25);
+      background: linear-gradient(135deg, var(--brand), var(--brand-dark) 54%, var(--brand-2));
+      box-shadow: 0 12px 30px rgba(124, 58, 237, 0.30);
     }
     .secondary {
-      color: #1d2939;
-      background: #edf2ff;
-      border: 1px solid #d7e0ff;
+      color: var(--ink);
+      background: rgba(30, 41, 59, 0.72);
+      border: 1px solid var(--line);
+    }
+    body.light .secondary { color: #1d2939; background: #edf2ff; border-color: #d7e0ff; }
+    .theme-toggle {
+      width: 100%;
+      margin-top: 0.7rem;
+      color: var(--muted);
+      background: transparent;
+      border: 1px solid var(--line);
     }
     .examples {
       display: grid;
@@ -167,7 +269,7 @@ HTML = """<!doctype html>
       padding: 0.65rem;
       background: var(--panel-soft);
       border: 1px solid var(--line);
-      color: #344054;
+      color: var(--ink);
       font-size: 0.82rem;
       font-weight: 750;
     }
@@ -190,13 +292,13 @@ HTML = """<!doctype html>
       font-weight: 850;
       text-transform: uppercase;
       letter-spacing: 0.035em;
-      background: #eef4ff;
+      background: rgba(99, 102, 241, 0.18);
       color: var(--brand-dark);
     }
-    .status-badge.good { background: #ecfdf3; color: var(--good); }
-    .status-badge.warn { background: #fffaeb; color: var(--warn); }
-    .status-badge.bad { background: #fef3f2; color: var(--bad); }
-    .status-badge.gap { background: #f4f3ff; color: var(--gap); }
+    .status-badge.good { background: rgba(52, 211, 153, 0.14); color: var(--good); }
+    .status-badge.warn { background: rgba(251, 191, 36, 0.14); color: var(--warn); }
+    .status-badge.bad { background: rgba(251, 113, 133, 0.14); color: var(--bad); }
+    .status-badge.gap { background: rgba(192, 132, 252, 0.14); color: var(--gap); }
     .summary-text { color: var(--muted); margin-top: 0.45rem; }
     .metric-row {
       display: flex;
@@ -228,8 +330,9 @@ HTML = """<!doctype html>
     .obligation {
       border: 1px solid var(--line);
       border-radius: 18px;
-      background: #fff;
+      background: var(--panel-strong);
       padding: 0.9rem;
+      box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
     }
     .obligation-top {
       display: flex;
@@ -241,17 +344,17 @@ HTML = """<!doctype html>
       display: inline-flex;
       padding: 0.25rem 0.5rem;
       border-radius: 999px;
-      background: #eef2f6;
-      color: #475467;
+      background: rgba(148, 163, 184, 0.14);
+      color: var(--muted);
       font-size: 0.74rem;
       font-weight: 800;
       white-space: nowrap;
     }
-    .tag.good { background: #ecfdf3; color: var(--good); }
-    .tag.warn { background: #fffaeb; color: var(--warn); }
-    .tag.bad { background: #fef3f2; color: var(--bad); }
-    .tag.gap { background: #f4f3ff; color: var(--gap); }
-    .principle { margin-top: 0.35rem; color: #475467; }
+    .tag.good { background: rgba(52, 211, 153, 0.14); color: var(--good); }
+    .tag.warn { background: rgba(251, 191, 36, 0.14); color: var(--warn); }
+    .tag.bad { background: rgba(251, 113, 133, 0.14); color: var(--bad); }
+    .tag.gap { background: rgba(192, 132, 252, 0.14); color: var(--gap); }
+    .principle { margin-top: 0.35rem; color: var(--muted); }
     .detail-grid {
       display: grid;
       grid-template-columns: repeat(auto-fit, minmax(190px, 1fr));
@@ -262,7 +365,7 @@ HTML = """<!doctype html>
       padding: 0.65rem;
       border-radius: 14px;
       background: var(--panel-soft);
-      border: 1px solid #e7edf6;
+      border: 1px solid var(--line);
       min-width: 0;
     }
     .mini b { display: block; font-size: 0.76rem; color: #667085; margin-bottom: 0.25rem; }
@@ -276,9 +379,9 @@ HTML = """<!doctype html>
       padding: 0.75rem;
       border: 1px solid var(--line);
       border-radius: 16px;
-      background: #fff;
+      background: var(--panel-strong);
     }
-    .list-item p { color: #475467; margin-top: 0.25rem; }
+    .list-item p { color: var(--muted); margin-top: 0.25rem; }
     details {
       border: 1px solid var(--line);
       border-radius: 18px;
@@ -328,7 +431,10 @@ HTML = """<!doctype html>
   <header>
     <div class="hero">
       <div>
-        <h1>Proof Vibe</h1>
+        <div class="brand-lockup">
+          <div class="mark">PV</div>
+          <h1>Proof Vibe</h1>
+        </div>
         <p class="subtitle">A local sanity-check console for physics hypotheses. It turns plain-language claims into reviewable assumptions, policy obligations, and Lean-traceable reports.</p>
         <div class="pill-row">
           <span class="pill">Lean-backed policy checks</span>
@@ -358,6 +464,7 @@ HTML = """<!doctype html>
         <button class="primary" id="run">Run sanity draft</button>
         <button class="secondary" id="coverage">Policy coverage</button>
       </div>
+      <button class="theme-toggle" id="themeToggle">Switch to light mode</button>
       <div class="examples">
         <button class="example" data-example="pass">Passing-style draft</button>
         <button class="example" data-example="missing">Missing assumptions</button>
@@ -426,6 +533,17 @@ async function post(path, body) {
 async function get(path) {
   const response = await fetch(path);
   return await response.json();
+}
+function setTheme(mode) {
+  const light = mode === "light";
+  document.body.classList.toggle("light", light);
+  document.getElementById("themeToggle").textContent = light ? "Switch to dark mode" : "Switch to light mode";
+  try { localStorage.setItem("proof-vibe-theme", mode); } catch (_) {}
+}
+try {
+  setTheme(localStorage.getItem("proof-vibe-theme") || "dark");
+} catch (_) {
+  setTheme("dark");
 }
 const examples = {
   pass: "A DFT architecture with an XC derivative discontinuity at an electron-number boundary, nonlocal spatial coupling, and a self-adjoint learned self-energy operator.",
@@ -564,6 +682,9 @@ document.getElementById("coverage").onclick = async () => {
   const data = await get("/api/coverage");
   renderCoverage(data);
   document.getElementById("toast").textContent = "Coverage loaded.";
+};
+document.getElementById("themeToggle").onclick = () => {
+  setTheme(document.body.classList.contains("light") ? "dark" : "light");
 };
 for (const button of document.querySelectorAll("[data-example]")) {
   button.addEventListener("click", () => {
