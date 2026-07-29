@@ -1,0 +1,76 @@
+{
+  "confirmed_at": "2026-07-23T17:20:27.420166+00:00",
+  "architecture_ir": {
+    "ir_schema_version": 1,
+    "operator": {
+      "construction": "zero",
+      "sites": 1
+    },
+    "spatial": {
+      "adjacency": "fin1_complete",
+      "receptive_field": 0,
+      "required_couplings": []
+    },
+    "xc": {
+      "boundary": 0,
+      "left_slope": 0,
+      "representation": "piecewise_hinge",
+      "right_slope": 1
+    }
+  },
+  "facts": {
+    "self_adjoint": {
+      "evidence": {
+        "description_sha256": "63d55570cf6c15a0696dff305b5f1ad60817e45d02098d9e20c090d1db6e25ad",
+        "kind": "user_attestation"
+      },
+      "value": {
+        "enforcement": "zero_operator",
+        "satisfied": true
+      }
+    },
+    "spatial_nonlocality_compatible": {
+      "evidence": {
+        "description_sha256": "63d55570cf6c15a0696dff305b5f1ad60817e45d02098d9e20c090d1db6e25ad",
+        "kind": "user_attestation"
+      },
+      "value": {
+        "receptive_field": 0,
+        "required_couplings": [],
+        "satisfied": true,
+        "uncovered_couplings": []
+      }
+    },
+    "xc_discontinuity_compatible": {
+      "evidence": {
+        "description_sha256": "63d55570cf6c15a0696dff305b5f1ad60817e45d02098d9e20c090d1db6e25ad",
+        "kind": "user_attestation"
+      },
+      "value": {
+        "electron_boundaries": [
+          0
+        ],
+        "mechanism": "piecewise_hinge",
+        "satisfied": true
+      }
+    }
+  },
+  "formalization": {
+    "profile": "dft-v1-hinge-zero-fin1"
+  },
+  "input_constraints": {},
+  "manifest_schema_version": 1,
+  "manifest_sha256": "56aa38761aaf0615df247d014202da86dbbd8aee7e9a20bc92785431303d4f92",
+  "model_id": "example-proof-bearing-model",
+  "policy": {
+    "id": "dft-architecture-v1",
+    "version": "0.1.0"
+  },
+  "source": {
+    "description": "A one-site learned self-energy with an explicit XC hinge discontinuity, complete spatial coverage, and the zero self-adjoint operator.",
+    "description_sha256": "63d55570cf6c15a0696dff305b5f1ad60817e45d02098d9e20c090d1db6e25ad",
+    "kind": "english"
+  },
+  "status": "confirmed",
+  "unresolved_facts": []
+}

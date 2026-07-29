@@ -1,0 +1,12 @@
+cff-version: 1.2.0
+message: "If you use this research prototype, please cite it using this metadata."
+title: "Proof Vibe: a Lean proof-search verifier and DFT architecture certification prototype"
+authors:
+  - given-names: "Anuj"
+date-released: 2026-07-29
+version: "0.1.0"
+license: "MIT"
+abstract: >
+  Proof Vibe is a local research prototype for Lean proof-attempt verification,
+  LLM-driven proof-search orchestration, and policy-driven DFT architecture
+  certification with hash-bound manifests and certificates.

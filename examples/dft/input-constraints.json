@@ -1,0 +1,21 @@
+{
+  "inputs": [
+    {
+      "name": "density_or_wavefunction",
+      "dtype": "float32",
+      "shape": [1, 64]
+    }
+  ],
+  "dynamic_shapes": {},
+  "output_contracts": [
+    {
+      "index": 0,
+      "role": "xc_energy"
+    },
+    {
+      "index": 1,
+      "role": "learned_self_energy"
+    }
+  ],
+  "required_couplings": []
+}

@@ -1,0 +1,4 @@
+{"version":1,"id":"fixture-ping","type":"ping"}
+{"version":1,"id":"fixture-valid","type":"verify","project":"sample","module":"ProofSearch.Examples","declaration":"theorem client_chosen_name (n : Nat) : n + 0 = n","target":"ProofSearch.Examples.add_zero","patch":"by rfl"}
+{"version":1,"id":"fixture-invalid","type":"verify","project":"sample","module":"ProofSearch.Examples","declaration":"theorem client_chosen_name (n : Nat) : n + 0 = n","target":"ProofSearch.Examples.add_zero","patch":"by exact Nat.zero"}
+{"version":1,"id":"fixture-batch","type":"search_batch","project":"sample","module":"ProofSearch.Examples","declaration":"theorem client_chosen_name (n : Nat) : n + 0 = n","target":"ProofSearch.Examples.add_zero","candidates":[{"id":"fixture-a","patch":"by rfl"},{"id":"fixture-b","patch":"by simp"}],"max_parallel":2,"stop_on_first_success":true}

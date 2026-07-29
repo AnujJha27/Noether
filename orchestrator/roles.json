@@ -1,0 +1,5 @@
+{
+  "direct": "Prefer short definitional, simplification, constructor, and exact proofs.",
+  "automation": "Explore appropriate Lean tactics and library automation; avoid placeholders.",
+  "structural": "Look for introductions, cases, induction, rewriting, and intermediate facts."
+}

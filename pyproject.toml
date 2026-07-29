@@ -1,0 +1,31 @@
+[project]
+name = "proof-vibe"
+version = "0.1.0"
+description = "Lean proof-search verifier and DFT architecture certification research prototype"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [
+  { name = "Anuj" }
+]
+keywords = ["lean", "proof-search", "formal-methods", "dft", "research-prototype"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
+  "License :: OSI Approved :: MIT License",
+  "Programming Language :: C++",
+  "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering",
+]
+
+[project.scripts]
+proof-vibe-dftcert = "dftcert.cli:main"
+proof-vibe-orchestrator = "orchestrator.cli:main"
+
+[tool.setuptools]
+packages = ["dftcert", "orchestrator", "extractors"]
+py-modules = []
+
+[tool.ruff]
+line-length = 88
+target-version = "py311"

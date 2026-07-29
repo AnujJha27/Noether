@@ -1,0 +1,23 @@
+[
+  {
+    "id": "56aa38761aaf-xc-discontinuity-compatible",
+    "status": "verified",
+    "winner": {
+      "patch": "by\n  refine ⟨{\n    electronNumber := 0\n    leftSlope := 0\n    rightSlope := 1\n    hasLeftDeriv := ?_\n    hasRightDeriv := ?_\n    discontinuity_ne_zero := by norm_num [xcDiscontinuity]\n  }⟩\n  · unfold HasLeftDeriv\n    apply (hasDerivAt_const (x := 0) (c := (0 : ℝ))).hasDerivWithinAt.congr\n    · intro x hx\n      simp [DFTCert.Example.xcEnergy, hx]\n    · simp [DFTCert.Example.xcEnergy]\n  · unfold HasRightDeriv\n    apply (hasDerivAt_id (𝕜 := ℝ) 0).hasDerivWithinAt.congr\n    · intro x hx\n      rcases hx.eq_or_lt with rfl | hx\n      · simp [DFTCert.Example.xcEnergy]\n      · simp [DFTCert.Example.xcEnergy, not_le.mpr hx]\n    · simp [DFTCert.Example.xcEnergy]"
+    }
+  },
+  {
+    "id": "56aa38761aaf-spatial-nonlocality-compatible",
+    "status": "verified",
+    "winner": {
+      "patch": "by\n  intro φ ψ x hAgreement\n  rfl"
+    }
+  },
+  {
+    "id": "56aa38761aaf-self-adjoint",
+    "status": "verified",
+    "winner": {
+      "patch": "by\n  exact IsSelfAdjoint.zero _"
+    }
+  }
+]

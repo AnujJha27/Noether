@@ -1,0 +1,4 @@
+A graph neural network represents the learned self-energy. It has enough
+message-passing layers to cover every coupling required by the reference
+self-energy, its operator is constrained to be self-adjoint, and its XC
+component contains an explicit nonzero derivative-discontinuity mechanism.

@@ -1,0 +1,6 @@
+name = "proof-search"
+version = "0.1.0"
+defaultTargets = ["ProofSearch"]
+
+[[lean_lib]]
+name = "ProofSearch"

@@ -1,0 +1,164 @@
+{
+  "policy_schema_version": 1,
+  "id": "dft-architecture-v1",
+  "version": "0.1.0",
+  "manifest_schema_version": 1,
+  "project": {
+    "id": "testv2",
+    "lean_library": "Testv2",
+    "toolchain": "leanprover/lean4:v4.25.0-rc2"
+  },
+  "architecture_ir_schema": {
+    "type": "object",
+    "required": ["ir_schema_version", "xc", "spatial", "operator"],
+    "additionalProperties": false,
+    "properties": {
+      "ir_schema_version": {"type": "integer", "enum": [1]},
+      "xc": {
+        "type": "object",
+        "required": ["representation", "boundary", "left_slope", "right_slope"],
+        "additionalProperties": false,
+        "properties": {
+          "representation": {"type": "string", "enum": ["piecewise_hinge"]},
+          "boundary": {"type": "number"},
+          "left_slope": {"type": "number"},
+          "right_slope": {"type": "number"}
+        }
+      },
+      "spatial": {
+        "type": "object",
+        "required": ["adjacency", "receptive_field", "required_couplings"],
+        "additionalProperties": false,
+        "properties": {
+          "adjacency": {"type": "string", "enum": ["fin1_complete"]},
+          "receptive_field": {"type": "integer"},
+          "required_couplings": {"type": "array", "items": {"type": "object"}}
+        }
+      },
+      "operator": {
+        "type": "object",
+        "required": ["construction", "sites"],
+        "additionalProperties": false,
+        "properties": {
+          "construction": {"type": "string", "enum": ["zero"]},
+          "sites": {"type": "integer", "enum": [1]}
+        }
+      }
+    }
+  },
+  "graph_analysis": {
+    "pass_through_targets": [
+      "aten.alias.default",
+      "aten.clone.default",
+      "aten.detach.default",
+      "aten.view.default"
+    ],
+    "xc_hinge_targets": ["aten.relu.default"],
+    "zero_operator_targets": [
+      "aten.zeros.default",
+      "aten.zeros_like.default",
+      "aten.zero.default"
+    ],
+    "pointwise_targets": [
+      "aten.alias.default",
+      "aten.clone.default",
+      "aten.detach.default",
+      "aten.view.default"
+    ]
+  },
+  "obligations": [
+    {
+      "id": "xc-discontinuity-compatible",
+      "fact": "xc_discontinuity_compatible",
+      "description": "The architecture can carry a nonzero XC derivative discontinuity at a certified electron-number boundary.",
+      "required": true,
+      "accepted_evidence": ["user_attestation", "graph_analysis", "formal_derivation"],
+      "value_schema": {
+        "type": "object",
+        "required": ["satisfied", "mechanism", "electron_boundaries"],
+        "additionalProperties": false,
+        "properties": {
+          "satisfied": {"type": "boolean"},
+          "mechanism": {"type": "string"},
+          "electron_boundaries": {"type": "array", "items": {"type": "number"}, "minItems": 1}
+        }
+      }
+    },
+    {
+      "id": "spatial-nonlocality-compatible",
+      "fact": "spatial_nonlocality_compatible",
+      "description": "The receptive field covers every physically required nonzero reference coupling.",
+      "required": true,
+      "accepted_evidence": ["user_attestation", "graph_analysis", "formal_derivation"],
+      "value_schema": {
+        "type": "object",
+        "required": ["satisfied", "receptive_field", "required_couplings", "uncovered_couplings"],
+        "additionalProperties": false,
+        "properties": {
+          "satisfied": {"type": "boolean"},
+          "receptive_field": {"type": "integer"},
+          "required_couplings": {"type": "array", "items": {"type": "object"}},
+          "uncovered_couplings": {"type": "array", "items": {"type": "object"}}
+        }
+      }
+    },
+    {
+      "id": "self-adjoint",
+      "fact": "self_adjoint",
+      "description": "The learned self-energy operator is self-adjoint.",
+      "required": true,
+      "accepted_evidence": ["user_attestation", "graph_analysis", "formal_derivation"],
+      "value_schema": {
+        "type": "object",
+        "required": ["satisfied", "enforcement"],
+        "additionalProperties": false,
+        "properties": {
+          "satisfied": {"type": "boolean"},
+          "enforcement": {"type": "string"}
+        }
+      }
+    }
+  ],
+  "generation_profiles": [
+    {
+      "id": "dft-v1-hinge-zero-fin1",
+      "module": "Testv2.Verifier",
+      "preamble_template": "lean/templates/dft-v1-hinge-zero-fin1.lean",
+      "assembly_template": "lean/templates/dft-v1-hinge-zero-fin1-assembly.lean",
+      "proof_limits": {
+        "wall_time_ms": 600000,
+        "cpu_time_s": 480,
+        "memory_mb": 8192
+      },
+      "ir_match": {
+        "ir_schema_version": 1,
+        "xc": {
+          "representation": "piecewise_hinge",
+          "boundary": 0,
+          "left_slope": 0,
+          "right_slope": 1
+        },
+        "spatial": {
+          "adjacency": "fin1_complete",
+          "receptive_field": 0,
+          "required_couplings": []
+        },
+        "operator": {
+          "construction": "zero",
+          "sites": 1
+        }
+      },
+      "declarations": {
+        "xc_discontinuity_compatible": "theorem generated_xc_discontinuity : Nonempty (XCDiscontinuityCertificate DFTCert.Example.xcEnergy)",
+        "spatial_nonlocality_compatible": "theorem generated_spatial_coverage : IsKLocal (Fin 1) DFTCert.Example.adjacency 0 DFTCert.Example.learnedSelfEnergy",
+        "self_adjoint": "theorem generated_self_adjoint : IsSelfAdjoint DFTCert.Example.learnedSelfEnergy"
+      }
+    }
+  ],
+  "certificate": {
+    "declaration": "DFTCert.Example.certificate",
+    "expected_type": "(verify (Fin 1) DFTCert.Example.manifest).approved = true",
+    "manifest_hash_constant": "DFTCert.Example.canonicalManifestSha256",
+    "manifest_hash_declaration": "DFTCert.Example.canonicalManifestSha256_bound"
+  }
+}
