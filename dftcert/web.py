@@ -99,14 +99,14 @@ HTML = """<!doctype html>
       opacity: 0.9;
     }
     header {
-      max-width: 1180px;
+      width: min(96vw, 1680px);
       margin: 0 auto;
-      padding: 2.8rem 1.25rem 1.2rem;
+      padding: 2.4rem 1rem 1.2rem;
     }
     main {
-      max-width: 1180px;
+      width: min(96vw, 1680px);
       margin: 0 auto;
-      padding: 0 1.25rem 3rem;
+      padding: 0 1rem 3rem;
     }
     h1 {
       margin: 0;
@@ -129,7 +129,7 @@ HTML = """<!doctype html>
     p { margin: 0; }
     .hero {
       display: grid;
-      grid-template-columns: minmax(0, 1.25fr) minmax(280px, 0.75fr);
+      grid-template-columns: minmax(0, 1.6fr) minmax(320px, 0.7fr);
       gap: 1rem;
       align-items: end;
       position: relative;
@@ -180,7 +180,7 @@ HTML = """<!doctype html>
     body.light .pill { background: rgba(255,255,255,0.78); color: #344054; }
     .layout {
       display: grid;
-      grid-template-columns: minmax(320px, 0.9fr) minmax(0, 1.45fr);
+      grid-template-columns: minmax(360px, 0.42fr) minmax(0, 1fr);
       gap: 1rem;
       align-items: start;
     }
@@ -226,7 +226,7 @@ HTML = """<!doctype html>
     textarea::placeholder, input::placeholder { color: #64748b; }
     input { padding: 0.82rem 0.9rem; }
     textarea {
-      min-height: 230px;
+      min-height: clamp(210px, 24vh, 360px);
       resize: vertical;
       padding: 0.95rem;
     }
@@ -280,7 +280,7 @@ HTML = """<!doctype html>
       font-weight: 750;
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     }
-    .results { display: grid; gap: 1rem; }
+    .results { display: grid; gap: 1rem; min-width: 0; }
     .summary {
       padding: 1.1rem;
       display: grid;
@@ -504,6 +504,33 @@ HTML = """<!doctype html>
       .hero, .layout, .summary { grid-template-columns: 1fr; }
       .composer { position: static; }
       .metric-row { justify-content: start; }
+    }
+    @media (min-width: 1320px) {
+      .cards {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
+        align-items: stretch;
+      }
+      .obligation {
+        display: flex;
+        flex-direction: column;
+      }
+      .obligation .detail-grid {
+        grid-template-columns: 1fr;
+      }
+      .list {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+      .summary {
+        grid-template-columns: minmax(0, 1fr) minmax(360px, auto);
+      }
+    }
+    @media (min-width: 1600px) {
+      .layout {
+        grid-template-columns: minmax(420px, 0.36fr) minmax(0, 1fr);
+      }
+      .section, .summary, .composer {
+        padding: 1.25rem;
+      }
     }
     @media (max-width: 520px) {
       header { padding-top: 1.5rem; }
