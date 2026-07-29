@@ -533,8 +533,8 @@ HTML = """<!doctype html>
         </div>
         <div class="metric-row">
           <div class="metric"><strong id="metricClaims">—</strong><span>claims</span></div>
-          <div class="metric"><strong id="metricQuestions">—</strong><span>questions</span></div>
-          <div class="metric"><strong id="metricObligations">—</strong><span>obligations</span></div>
+          <div class="metric"><strong id="metricQuestions">—</strong><span id="metricQuestionsLabel">questions</span></div>
+          <div class="metric"><strong id="metricObligations">—</strong><span id="metricObligationsLabel">obligations</span></div>
         </div>
       </div>
 
@@ -557,8 +557,8 @@ HTML = """<!doctype html>
         <div class="section">
           <div class="section-head">
             <div>
-              <h2>Clarifying questions</h2>
-              <p>Questions to ask before treating the draft as a formal claim.</p>
+              <h2 id="questionsTitle">Clarifying questions</h2>
+              <p id="questionsSubtitle">Questions to ask before treating the draft as a formal claim.</p>
             </div>
           </div>
           <div id="questions" class="list"><div class="empty">No questions yet.</div></div>
@@ -566,8 +566,8 @@ HTML = """<!doctype html>
         <div class="section">
           <div class="section-head">
             <div>
-              <h2>Open issues</h2>
-              <p>Only unresolved or missing assumptions appear here. Extracted claims are shown inside the principle cards above.</p>
+              <h2 id="issuesTitle">Open issues</h2>
+              <p id="issuesSubtitle">Only unresolved or missing assumptions appear here. Extracted claims are shown inside the principle cards above.</p>
             </div>
           </div>
           <div id="assumptions" class="list"><div class="empty">No open issues yet.</div></div>
@@ -659,7 +659,13 @@ function renderReport(data) {
   document.getElementById("summaryText").textContent = report.summary || "Draft report generated.";
   document.getElementById("metricClaims").textContent = manifest.hypothesis_intake?.extracted_claim_count ?? Object.keys(manifest.facts || {}).length;
   document.getElementById("metricQuestions").textContent = (report.clarification_questions || []).length;
+  document.getElementById("metricQuestionsLabel").textContent = "questions";
   document.getElementById("metricObligations").textContent = (report.obligations || []).length;
+  document.getElementById("metricObligationsLabel").textContent = "obligations";
+  document.getElementById("questionsTitle").textContent = "Clarifying questions";
+  document.getElementById("questionsSubtitle").textContent = "Questions to ask before treating the draft as a formal claim.";
+  document.getElementById("issuesTitle").textContent = "Open issues";
+  document.getElementById("issuesSubtitle").textContent = "Only unresolved or missing assumptions appear here. Extracted claims are shown inside the principle cards above.";
   renderList("obligations", report.obligations || [], (item) => {
     const cls = statusClass(item.category);
     const claimText = item.normalized_claim
@@ -710,8 +716,14 @@ function renderCoverage(data) {
   document.getElementById("summaryTitle").textContent = data.policy.id;
   document.getElementById("summaryText").textContent = `Backed by ${data.project.lean_library} on ${data.project.toolchain}.`;
   document.getElementById("metricClaims").textContent = data.supported_claims.length;
-  document.getElementById("metricQuestions").textContent = data.not_supported.length;
+  document.getElementById("metricQuestions").textContent = data.formalization_profiles.length;
+  document.getElementById("metricQuestionsLabel").textContent = "profiles";
   document.getElementById("metricObligations").textContent = data.formalization_profiles.length;
+  document.getElementById("metricObligationsLabel").textContent = "generators";
+  document.getElementById("questionsTitle").textContent = "Formalization profiles";
+  document.getElementById("questionsSubtitle").textContent = "Reviewed Lean generation profiles available for this policy.";
+  document.getElementById("issuesTitle").textContent = "Coverage notes";
+  document.getElementById("issuesSubtitle").textContent = "Concise policy metadata. Full scope details remain available in raw JSON.";
   renderList("obligations", data.supported_claims, (item) => `
     <article class="obligation good">
       <div class="obligation-top">
@@ -727,16 +739,19 @@ function renderCoverage(data) {
       </div>
     </article>
   `, "No supported claims listed.");
-  renderList("questions", data.not_supported, (item) => `
-    <div class="list-item"><strong>Not supported</strong><p>${escapeHtml(item)}</p></div>
-  `, "No unsupported scope listed.");
-  renderList("assumptions", data.formalization_profiles, (item) => `
+  renderList("questions", data.formalization_profiles, (item) => `
     <div class="list-item">
       <strong>${escapeHtml(item.id)}</strong>
       <p>Lean module: <code class="inline">${escapeHtml(item.module)}</code></p>
       <p><small>Facts: ${escapeHtml(item.facts.join(", "))}</small></p>
     </div>
   `, "No formalization profiles listed.");
+  renderList("assumptions", [{
+    title: "Policy ready",
+    body: `${data.supported_claims.length} formalized checks are available under this policy.`
+  }], (item) => `
+    <div class="list-item"><strong>${escapeHtml(item.title)}</strong><p>${escapeHtml(item.body)}</p></div>
+  `, "No coverage notes.");
   document.getElementById("rawJson").textContent = JSON.stringify(data, null, 2);
 }
 document.getElementById("run").onclick = async () => {
