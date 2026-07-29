@@ -324,6 +324,41 @@ HTML = """<!doctype html>
     }
     .metric strong { display: block; font-size: 1.25rem; }
     .metric span { color: var(--muted); font-size: 0.76rem; font-weight: 750; }
+    .flow {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 0.45rem;
+      margin-top: 0.95rem;
+      max-width: 680px;
+    }
+    .flow-step {
+      border: 1px solid var(--line-soft);
+      background: rgba(5, 5, 5, 0.42);
+      padding: 0.55rem;
+      min-height: 64px;
+    }
+    .flow-step b {
+      display: block;
+      color: var(--ink);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+      font-size: 0.74rem;
+      letter-spacing: 0.04em;
+      text-transform: uppercase;
+    }
+    .flow-step span {
+      display: block;
+      margin-top: 0.22rem;
+      color: var(--muted);
+      font-size: 0.78rem;
+    }
+    .flow-step.active {
+      border-color: var(--brand);
+      box-shadow: inset 4px 0 0 var(--brand);
+    }
+    .flow-step.good { border-color: var(--good); box-shadow: inset 4px 0 0 var(--good); }
+    .flow-step.warn { border-color: var(--warn); box-shadow: inset 4px 0 0 var(--warn); }
+    .flow-step.bad { border-color: var(--bad); box-shadow: inset 4px 0 0 var(--bad); }
+    .flow-step.gap { border-color: var(--gap); box-shadow: inset 4px 0 0 var(--gap); }
     .section { padding: 1.1rem; }
     .section + .section { border-top: 1px solid var(--line); }
     .section-head {
@@ -530,6 +565,12 @@ HTML = """<!doctype html>
           <span id="statusBadge" class="status-badge">Ready</span>
           <h2 id="summaryTitle" style="margin-top:0.7rem">Draft a hypothesis report</h2>
           <p id="summaryText" class="summary-text">Results will appear here with obligations, assumptions, clarifying questions, and traceability.</p>
+          <div class="flow" id="flow">
+            <div class="flow-step active"><b>01 Intake</b><span>hypothesis text</span></div>
+            <div class="flow-step"><b>02 Claims</b><span>reviewable facts</span></div>
+            <div class="flow-step"><b>03 Obligations</b><span>Lean targets</span></div>
+            <div class="flow-step"><b>04 Verdict</b><span>not run</span></div>
+          </div>
         </div>
         <div class="metric-row">
           <div class="metric"><strong id="metricClaims">—</strong><span>claims</span></div>
@@ -623,6 +664,16 @@ function statusClass(status) {
   if (status === "inconclusive_missing_assumption" || status === "proof_required") return "warn";
   return "";
 }
+function renderFlow(status, mode) {
+  const cls = statusClass(status);
+  const verdict = mode === "coverage" ? "coverage" : label(status || "draft");
+  document.getElementById("flow").innerHTML = `
+    <div class="flow-step active"><b>01 Intake</b><span>${mode === "coverage" ? "policy file" : "hypothesis text"}</span></div>
+    <div class="flow-step ${mode === "coverage" ? "good" : "active"}"><b>02 Claims</b><span>${mode === "coverage" ? "supported facts" : "extracted facts"}</span></div>
+    <div class="flow-step ${mode === "coverage" ? "good" : (cls || "active")}"><b>03 Obligations</b><span>${mode === "coverage" ? "profiles loaded" : "policy mapped"}</span></div>
+    <div class="flow-step ${cls}"><b>04 Verdict</b><span>${escapeHtml(verdict)}</span></div>
+  `;
+}
 function issueAssumptions(report) {
   const categories = new Set(["needs_clarification", "missing", "unresolved"]);
   const problemFacts = new Set((report.obligations || [])
@@ -655,6 +706,7 @@ function renderReport(data) {
   const badge = document.getElementById("statusBadge");
   badge.className = `status-badge ${cls}`;
   badge.textContent = label(status);
+  renderFlow(status, "report");
   document.getElementById("summaryTitle").textContent = manifest.model_id || "Hypothesis report";
   document.getElementById("summaryText").textContent = report.summary || "Draft report generated.";
   document.getElementById("metricClaims").textContent = manifest.hypothesis_intake?.extracted_claim_count ?? Object.keys(manifest.facts || {}).length;
@@ -713,6 +765,7 @@ function renderCoverage(data) {
   const badge = document.getElementById("statusBadge");
   badge.className = "status-badge";
   badge.textContent = "Policy coverage";
+  renderFlow("consistent_with_policy", "coverage");
   document.getElementById("summaryTitle").textContent = data.policy.id;
   document.getElementById("summaryText").textContent = `Backed by ${data.project.lean_library} on ${data.project.toolchain}.`;
   document.getElementById("metricClaims").textContent = data.supported_claims.length;
