@@ -24,43 +24,45 @@ HTML = """<!doctype html>
   <style>
     :root {
       color-scheme: dark;
-      --bg: #070914;
-      --bg-2: #0d1224;
-      --panel: rgba(15, 23, 42, 0.74);
-      --panel-strong: rgba(17, 24, 39, 0.92);
-      --panel-soft: rgba(30, 41, 59, 0.72);
-      --ink: #f5f7fb;
-      --muted: #9aa7bd;
-      --line: rgba(148, 163, 184, 0.22);
-      --brand: #7c3aed;
-      --brand-2: #06b6d4;
-      --brand-dark: #4f46e5;
-      --good: #34d399;
-      --warn: #fbbf24;
+      --bg: #050505;
+      --bg-2: #0b0a0a;
+      --panel: rgba(12, 12, 12, 0.88);
+      --panel-strong: rgba(17, 16, 16, 0.96);
+      --panel-soft: rgba(26, 24, 24, 0.92);
+      --ink: #eee8dc;
+      --muted: #9d9387;
+      --line: rgba(159, 18, 57, 0.32);
+      --line-soft: rgba(238, 232, 220, 0.11);
+      --brand: #9f1239;
+      --brand-2: #e11d48;
+      --brand-dark: #5f071f;
+      --good: #a7f3d0;
+      --warn: #eab308;
       --bad: #fb7185;
-      --gap: #c084fc;
-      --shadow: 0 24px 80px rgba(0, 0, 0, 0.42);
-      --glow: 0 0 34px rgba(124, 58, 237, 0.35);
+      --gap: #d8b4fe;
+      --shadow: 0 28px 90px rgba(0, 0, 0, 0.66);
+      --glow: 0 0 26px rgba(159, 18, 57, 0.26);
     }
     body.light {
       color-scheme: light;
-      --bg: #f5f7fb;
-      --bg-2: #eef3fb;
-      --panel: rgba(255, 255, 255, 0.86);
-      --panel-strong: rgba(255, 255, 255, 0.96);
-      --panel-soft: #f8fafc;
-      --ink: #172033;
-      --muted: #667085;
-      --line: #d9e1ee;
-      --brand: #335cff;
-      --brand-2: #0891b2;
-      --brand-dark: #243fd1;
+      --bg: #e8dfd2;
+      --bg-2: #d8cdbc;
+      --panel: rgba(245, 239, 229, 0.90);
+      --panel-strong: rgba(255, 250, 241, 0.96);
+      --panel-soft: #eee5d7;
+      --ink: #201815;
+      --muted: #6f6257;
+      --line: rgba(95, 7, 31, 0.28);
+      --line-soft: rgba(32, 24, 21, 0.13);
+      --brand: #7f1d1d;
+      --brand-2: #991b1b;
+      --brand-dark: #450a0a;
       --good: #047857;
-      --warn: #b45309;
-      --bad: #b42318;
-      --gap: #6d28d9;
-      --shadow: 0 18px 48px rgba(16, 24, 40, 0.10);
-      --glow: 0 0 30px rgba(51, 92, 255, 0.16);
+      --warn: #92400e;
+      --bad: #991b1b;
+      --gap: #581c87;
+      --shadow: 0 18px 48px rgba(32, 24, 21, 0.18);
+      --glow: none;
     }
     * { box-sizing: border-box; }
     body {
@@ -68,31 +70,33 @@ HTML = """<!doctype html>
       min-height: 100vh;
       font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
       color: var(--ink);
-      background:
-        radial-gradient(circle at 12% 5%, rgba(124, 58, 237, 0.32), transparent 30rem),
-        radial-gradient(circle at 88% 8%, rgba(6, 182, 212, 0.22), transparent 28rem),
-        radial-gradient(circle at 50% 100%, rgba(79, 70, 229, 0.16), transparent 34rem),
-        linear-gradient(180deg, var(--bg) 0%, var(--bg-2) 54%, #080b16 100%);
+      background: var(--bg);
       line-height: 1.45;
       overflow-x: hidden;
     }
     body.light {
-      background:
-        radial-gradient(circle at 12% 5%, rgba(51, 92, 255, 0.16), transparent 34rem),
-        radial-gradient(circle at 88% 8%, rgba(8, 145, 178, 0.14), transparent 30rem),
-        linear-gradient(180deg, #fbfcff 0%, var(--bg) 45%, var(--bg-2) 100%);
+      background: var(--bg);
     }
     body::before {
       content: "";
       position: fixed;
       inset: 0;
       pointer-events: none;
-      opacity: 0.38;
+      opacity: 0.55;
       background-image:
-        linear-gradient(rgba(148, 163, 184, 0.08) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(148, 163, 184, 0.08) 1px, transparent 1px);
-      background-size: 44px 44px;
-      mask-image: radial-gradient(circle at 50% 10%, black, transparent 72%);
+        linear-gradient(var(--line-soft) 1px, transparent 1px),
+        linear-gradient(90deg, var(--line-soft) 1px, transparent 1px);
+      background-size: 32px 32px;
+      mask-image: linear-gradient(black, transparent 82%);
+    }
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      border-top: 2px solid rgba(159, 18, 57, 0.55);
+      box-shadow: inset 0 18px 60px rgba(159, 18, 57, 0.10);
+      opacity: 0.9;
     }
     header {
       max-width: 1180px;
@@ -108,21 +112,20 @@ HTML = """<!doctype html>
       margin: 0;
       font-size: clamp(2.3rem, 5vw, 4.8rem);
       line-height: 0.95;
-      letter-spacing: -0.065em;
-      background: linear-gradient(135deg, #ffffff 5%, #a5b4fc 38%, #67e8f9 72%, #f0abfc 100%);
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
-      text-shadow: 0 18px 80px rgba(124, 58, 237, 0.36);
+      letter-spacing: -0.045em;
+      font-family: Georgia, "Times New Roman", ui-serif, serif;
+      color: var(--ink);
+      text-shadow: 0 0 24px rgba(238, 232, 220, 0.12), 0 0 2px rgba(225, 29, 72, 0.40);
     }
     body.light h1 {
-      background: linear-gradient(135deg, #172033 5%, #335cff 48%, #0891b2 100%);
-      -webkit-background-clip: text;
-      background-clip: text;
-      color: transparent;
+      color: var(--ink);
       text-shadow: none;
     }
-    h2, h3 { margin: 0; letter-spacing: -0.02em; }
+    h2, h3 {
+      margin: 0;
+      letter-spacing: -0.02em;
+      font-family: Georgia, "Times New Roman", ui-serif, serif;
+    }
     p { margin: 0; }
     .hero {
       display: grid;
@@ -140,18 +143,17 @@ HTML = """<!doctype html>
       width: 64px;
       height: 64px;
       flex: 0 0 auto;
-      border-radius: 22px;
+      border-radius: 6px;
       display: grid;
       place-items: center;
-      color: white;
-      background:
-        linear-gradient(135deg, rgba(124, 58, 237, 0.95), rgba(6, 182, 212, 0.88)),
-        radial-gradient(circle at top left, white, transparent);
-      box-shadow: var(--glow), inset 0 1px 0 rgba(255,255,255,0.34);
-      border: 1px solid rgba(255,255,255,0.20);
-      font-weight: 950;
-      font-size: 1.35rem;
-      letter-spacing: -0.08em;
+      color: var(--ink);
+      background: #070707;
+      box-shadow: var(--glow), inset 0 0 0 1px rgba(238, 232, 220, 0.08);
+      border: 1px solid var(--brand);
+      font-family: Georgia, "Times New Roman", ui-serif, serif;
+      font-weight: 900;
+      font-size: 2rem;
+      line-height: 1;
     }
     .subtitle {
       margin-top: 1rem;
@@ -166,11 +168,13 @@ HTML = """<!doctype html>
       gap: 0.4rem;
       padding: 0.42rem 0.72rem;
       border: 1px solid var(--line);
-      border-radius: 999px;
-      background: rgba(15, 23, 42, 0.62);
+      border-radius: 2px;
+      background: rgba(8, 8, 8, 0.82);
       color: var(--ink);
-      font-size: 0.86rem;
-      font-weight: 650;
+      font-size: 0.78rem;
+      font-weight: 760;
+      letter-spacing: 0.035em;
+      text-transform: uppercase;
       backdrop-filter: blur(10px);
     }
     body.light .pill { background: rgba(255,255,255,0.78); color: #344054; }
@@ -183,9 +187,9 @@ HTML = """<!doctype html>
     .panel {
       background: var(--panel);
       border: 1px solid var(--line);
-      border-radius: 24px;
+      border-radius: 10px;
       box-shadow: var(--shadow);
-      backdrop-filter: blur(18px);
+      backdrop-filter: blur(8px);
       position: relative;
       overflow: hidden;
     }
@@ -194,8 +198,9 @@ HTML = """<!doctype html>
       position: absolute;
       inset: 0;
       pointer-events: none;
-      background: linear-gradient(135deg, rgba(255,255,255,0.10), transparent 34%);
-      opacity: 0.72;
+      border-top: 1px solid rgba(238, 232, 220, 0.10);
+      border-left: 1px solid rgba(238, 232, 220, 0.035);
+      opacity: 0.9;
     }
     .panel > * { position: relative; }
     .composer { padding: 1.1rem; position: sticky; top: 1rem; }
@@ -210,8 +215,8 @@ HTML = """<!doctype html>
     input, textarea {
       width: 100%;
       border: 1px solid var(--line);
-      border-radius: 16px;
-      background: rgba(2, 6, 23, 0.48);
+      border-radius: 6px;
+      background: rgba(5, 5, 5, 0.80);
       color: var(--ink);
       font: inherit;
       outline: none;
@@ -226,13 +231,13 @@ HTML = """<!doctype html>
       padding: 0.95rem;
     }
     input:focus, textarea:focus {
-      border-color: rgba(51, 92, 255, 0.7);
-      box-shadow: 0 0 0 4px rgba(51, 92, 255, 0.12);
+      border-color: var(--brand-2);
+      box-shadow: 0 0 0 3px rgba(159, 18, 57, 0.18);
     }
     .actions { display: flex; gap: 0.6rem; flex-wrap: wrap; margin-top: 1rem; }
     button {
       border: 0;
-      border-radius: 14px;
+      border-radius: 4px;
       padding: 0.78rem 0.95rem;
       font: inherit;
       font-weight: 800;
@@ -242,15 +247,16 @@ HTML = """<!doctype html>
     button:hover { transform: translateY(-1px); }
     .primary {
       color: white;
-      background: linear-gradient(135deg, var(--brand), var(--brand-dark) 54%, var(--brand-2));
-      box-shadow: 0 12px 30px rgba(124, 58, 237, 0.30);
+      background: #7f0f2f;
+      border: 1px solid #e11d48;
+      box-shadow: 0 0 0 1px rgba(0,0,0,0.6), 0 12px 28px rgba(127, 15, 47, 0.22);
     }
     .secondary {
       color: var(--ink);
-      background: rgba(30, 41, 59, 0.72);
+      background: #121010;
       border: 1px solid var(--line);
     }
-    body.light .secondary { color: #1d2939; background: #edf2ff; border-color: #d7e0ff; }
+    body.light .secondary { color: var(--ink); background: #e9dfd0; border-color: var(--line); }
     .theme-toggle {
       width: 100%;
       margin-top: 0.7rem;
@@ -272,6 +278,7 @@ HTML = """<!doctype html>
       color: var(--ink);
       font-size: 0.82rem;
       font-weight: 750;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
     }
     .results { display: grid; gap: 1rem; }
     .summary {
@@ -287,13 +294,14 @@ HTML = """<!doctype html>
       align-items: center;
       gap: 0.45rem;
       padding: 0.5rem 0.75rem;
-      border-radius: 999px;
+      border-radius: 2px;
       font-size: 0.82rem;
       font-weight: 850;
       text-transform: uppercase;
       letter-spacing: 0.035em;
-      background: rgba(99, 102, 241, 0.18);
-      color: var(--brand-dark);
+      background: rgba(159, 18, 57, 0.16);
+      color: var(--ink);
+      border: 1px solid var(--line);
     }
     .status-badge.good { background: rgba(52, 211, 153, 0.14); color: var(--good); }
     .status-badge.warn { background: rgba(251, 191, 36, 0.14); color: var(--warn); }
@@ -309,7 +317,7 @@ HTML = """<!doctype html>
     .metric {
       min-width: 112px;
       padding: 0.65rem 0.8rem;
-      border-radius: 16px;
+      border-radius: 4px;
       background: var(--panel-soft);
       border: 1px solid var(--line);
       text-align: right;
@@ -329,7 +337,7 @@ HTML = """<!doctype html>
     .cards { display: grid; gap: 0.75rem; }
     .obligation {
       border: 1px solid var(--line);
-      border-radius: 18px;
+      border-radius: 6px;
       background: var(--panel-strong);
       padding: 0.9rem;
       box-shadow: inset 0 1px 0 rgba(255,255,255,0.04);
@@ -343,7 +351,7 @@ HTML = """<!doctype html>
     .tag {
       display: inline-flex;
       padding: 0.25rem 0.5rem;
-      border-radius: 999px;
+      border-radius: 2px;
       background: rgba(148, 163, 184, 0.14);
       color: var(--muted);
       font-size: 0.74rem;
@@ -363,12 +371,12 @@ HTML = """<!doctype html>
     }
     .mini {
       padding: 0.65rem;
-      border-radius: 14px;
+      border-radius: 4px;
       background: var(--panel-soft);
       border: 1px solid var(--line);
       min-width: 0;
     }
-    .mini b { display: block; font-size: 0.76rem; color: #667085; margin-bottom: 0.25rem; }
+    .mini b { display: block; font-size: 0.76rem; color: var(--muted); margin-bottom: 0.25rem; }
     .mini code, code.inline {
       font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
       font-size: 0.79rem;
@@ -378,22 +386,22 @@ HTML = """<!doctype html>
     .list-item {
       padding: 0.75rem;
       border: 1px solid var(--line);
-      border-radius: 16px;
+      border-radius: 4px;
       background: var(--panel-strong);
     }
     .list-item p { color: var(--muted); margin-top: 0.25rem; }
     details {
       border: 1px solid var(--line);
-      border-radius: 18px;
+      border-radius: 6px;
       overflow: hidden;
-      background: #0b1020;
-      color: #d6e0ff;
+      background: #060606;
+      color: var(--ink);
     }
     summary {
       cursor: pointer;
       padding: 0.9rem 1rem;
       font-weight: 850;
-      background: #111936;
+      background: #100b0d;
     }
     pre {
       margin: 0;
@@ -406,7 +414,7 @@ HTML = """<!doctype html>
       color: var(--muted);
       background: var(--panel-soft);
       border: 1px dashed var(--line);
-      border-radius: 16px;
+      border-radius: 4px;
       padding: 0.85rem;
     }
     .toast {
@@ -432,14 +440,14 @@ HTML = """<!doctype html>
     <div class="hero">
       <div>
         <div class="brand-lockup">
-          <div class="mark">PV</div>
+          <div class="mark">†</div>
           <h1>Proof Vibe</h1>
         </div>
-        <p class="subtitle">A local sanity-check console for physics hypotheses. It turns plain-language claims into reviewable assumptions, policy obligations, and Lean-traceable reports.</p>
+        <p class="subtitle">A local sanity-check console for physics hypotheses. Plain-language claims enter; reviewable assumptions, policy obligations, and Lean-traceable reports come out.</p>
         <div class="pill-row">
-          <span class="pill">Lean-backed policy checks</span>
+          <span class="pill">Lean-backed checks</span>
           <span class="pill">Assumption ledger</span>
-          <span class="pill">No silent LLM authority</span>
+          <span class="pill">No silent oracle</span>
         </div>
       </div>
       <div class="panel section">
@@ -464,7 +472,7 @@ HTML = """<!doctype html>
         <button class="primary" id="run">Run sanity draft</button>
         <button class="secondary" id="coverage">Policy coverage</button>
       </div>
-      <button class="theme-toggle" id="themeToggle">Switch to light mode</button>
+      <button class="theme-toggle" id="themeToggle">Switch to ash mode</button>
       <div class="examples">
         <button class="example" data-example="pass">Passing-style draft</button>
         <button class="example" data-example="missing">Missing assumptions</button>
@@ -537,7 +545,7 @@ async function get(path) {
 function setTheme(mode) {
   const light = mode === "light";
   document.body.classList.toggle("light", light);
-  document.getElementById("themeToggle").textContent = light ? "Switch to dark mode" : "Switch to light mode";
+  document.getElementById("themeToggle").textContent = light ? "Return to dark mode" : "Switch to ash mode";
   try { localStorage.setItem("proof-vibe-theme", mode); } catch (_) {}
 }
 try {
