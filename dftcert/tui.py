@@ -173,7 +173,10 @@ class TuiApp:
         curses.wrapper(self._main)
 
     def _main(self, screen: Any) -> None:
-        curses.curs_set(1)
+        try:
+            curses.curs_set(1)
+        except curses.error:
+            pass
         screen.keypad(True)
         self._colors()
         while True:
