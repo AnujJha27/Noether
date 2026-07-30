@@ -3,11 +3,17 @@ from __future__ import annotations
 import json
 import pathlib
 import sys
+import tempfile
 import unittest
 
+from dftcert.tui import build_search_inspector, render_plain
+from orchestrator.agents import AgentRegistry, AgentSpec
 from orchestrator.engine import Orchestrator, SearchConfig
 from orchestrator.models import SearchTask
+from orchestrator.permissions import PermissionPolicy
 from orchestrator.providers import CommandProvider, MockProvider
+from orchestrator.replay import replay_search_result
+from orchestrator.run_manager import RunStore
 from orchestrator.verifier import VerifierClient
 
 
@@ -208,11 +214,12 @@ class EngineTests(unittest.TestCase):
         )
         result = Orchestrator(provider, verifier, config).search(self.task())
         self.assertEqual(result["status"], "exhausted")
-        self.assertEqual(len(result["agent_turns"]), 2)
+        self.assertGreaterEqual(len(result["agent_turns"]), 2)
         self.assertTrue(result["supervisor_decisions"])
         self.assertTrue(any(event["type"] == "handoff_created" for event in result["events"]))
         self.assertIn("direct", result["agent_scorecard"])
         self.assertGreaterEqual(result["agent_scorecard"]["direct"]["candidate_count"], 1)
+        self.assertIn("model_call_records", result)
 
     def test_resume_accepts_prior_handoff_as_next_turn_input(self):
         first = Orchestrator(
@@ -231,6 +238,8 @@ class EngineTests(unittest.TestCase):
             if turn.get("received_handoff_id")
         ]
         self.assertTrue(received)
+        self.assertTrue(second["handoff_receipts"])
+        self.assertTrue(second["handoff_receipts"][0]["accepted"])
 
     def test_subgoal_dag_is_visible_to_agents_and_supervisor(self):
         provider = CapturingProvider([
@@ -252,6 +261,85 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(
             result["supervisor_decisions"][0]["budget_state"]["subgoal_count"], 2
         )
+
+    def test_structured_registry_decomposer_memory_and_replay_trace(self):
+        registry = AgentRegistry({
+            "direct": AgentSpec(
+                name="direct", kind="proposer", instructions="try exact",
+                tools=("lean_diagnostics", "frontier_read", "candidate_submit"),
+                max_candidates=1, explicit_tools=True,
+            ),
+            "decomposer": AgentSpec(
+                name="decomposer", kind="decomposer", instructions="split goals",
+                tools=("task_decompose", "policy_read"), explicit_tools=True,
+            ),
+            "critic": AgentSpec(
+                name="critic", kind="critic", instructions="rank",
+                tools=("candidate_rank", "frontier_read"), explicit_tools=True,
+            ),
+        })
+        provider = CapturingProvider([
+            {
+                "subgoals": [{"id": "claim-a", "theorem": "theorem a : True"}],
+                "rationale": "root theorem has one formal obligation",
+            },
+            {"candidates": [{"patch": "good", "rationale": "done"}]},
+        ])
+        result = Orchestrator(
+            provider, FakeBatchVerifier(),
+            SearchConfig(max_rounds=1, agent_registry=registry),
+        ).search(self.task())
+        self.assertEqual(result["status"], "verified")
+        self.assertEqual(result["task"]["subgoals"][0]["id"], "claim-a")
+        self.assertIn("claim-a", provider.prompts[1]["prompt"])
+        self.assertIn("memory", result)
+        self.assertEqual(len(result["model_call_records"]), 2)
+        replayed = replay_search_result(result)
+        self.assertIn("MODEL CALLS", replayed)
+        self.assertIn("decomposition_completed", replayed)
+
+    def test_structured_tool_permissions_are_enforced(self):
+        strict = AgentSpec(
+            name="strict", kind="proposer", instructions="try",
+            tools=("frontier_read",), explicit_tools=True,
+        )
+        with self.assertRaises(RuntimeError):
+            PermissionPolicy().require(strict, "candidate_submit")
+
+    def test_run_store_persists_task_queue_and_artifacts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            store = RunStore(directory)
+            state = store.create([self.task()])
+            store.record_task_started(state, "search")
+            artifact = store.record_task_result(state, {
+                "version": 1, "id": "search", "status": "verified",
+                "attempts": [], "events": [],
+            })
+            self.assertTrue(artifact.exists())
+            loaded = store.load()
+            self.assertEqual(loaded.status, "completed")
+            self.assertEqual(loaded.completed[0]["task_id"], "search")
+
+    def test_terminal_inspector_renders_search_artifacts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "search.json"
+            path.write_text(json.dumps({
+                "version": 1, "id": "search", "status": "verified",
+                "model_calls": 1, "unique_candidates": 1, "rounds_used": 1,
+                "task": self.task().to_json(),
+                "supervisor_decisions": [],
+                "agent_turns": [],
+                "attempts": [{
+                    "id": "search-r1-direct-1",
+                    "agent": "direct",
+                    "round": 1,
+                    "status": "verified",
+                    "diagnostics": "",
+                }],
+            }), encoding="utf-8")
+            rendered = render_plain(build_search_inspector(path), width=88)
+            self.assertIn("SEARCH", rendered)
+            self.assertIn("LEAN DIAGNOSTICS", rendered)
 
 
 if __name__ == "__main__":

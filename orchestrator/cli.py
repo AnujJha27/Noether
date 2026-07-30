@@ -5,10 +5,13 @@ import json
 import shlex
 import sys
 from pathlib import Path
+from typing import Any
 
-from .engine import DEFAULT_ROLES_FILE, Orchestrator, SearchConfig, load_roles
+from .agents import load_agent_registry
+from .engine import DEFAULT_AGENTS_FILE, Orchestrator, SearchConfig
 from .models import SearchTask
 from .providers import CommandProvider, HttpProvider, MockProvider, token_from_environment
+from .run_manager import RunStore
 from .verifier import VerifierClient
 
 
@@ -26,8 +29,10 @@ def arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--agent-parallelism", type=int, default=3)
     parser.add_argument("--verify-parallelism", type=int, default=4)
     parser.add_argument("--frontier-width", type=int, default=6)
-    parser.add_argument("--roles-file", default=str(DEFAULT_ROLES_FILE))
+    parser.add_argument("--agents-file", help="structured agent registry JSON")
+    parser.add_argument("--roles-file", help="legacy alias for --agents-file")
     parser.add_argument("--journal-dir")
+    parser.add_argument("--run-dir", help="durable multi-task run state directory")
     parser.add_argument("--resume-journal", action="store_true")
     return parser.parse_args(argv)
 
@@ -48,6 +53,8 @@ def main(argv: list[str] | None = None) -> int:
     try:
         options = arguments(argv)
         provider = provider_from_args(options)
+        agents_file = options.agents_file or options.roles_file or str(DEFAULT_AGENTS_FILE)
+        registry = load_agent_registry(agents_file)
         config = SearchConfig(
             max_rounds=options.max_rounds,
             candidates_per_agent=options.candidates_per_agent,
@@ -56,7 +63,7 @@ def main(argv: list[str] | None = None) -> int:
             max_agent_parallelism=options.agent_parallelism,
             max_parallel_verifications=options.verify_parallelism,
             frontier_width=options.frontier_width,
-            proposer_roles=load_roles(options.roles_file),
+            agent_registry=registry,
         )
     except (ValueError, SystemExit) as error:
         if isinstance(error, SystemExit):
@@ -67,29 +74,43 @@ def main(argv: list[str] | None = None) -> int:
     try:
         verifier.start()
         engine = Orchestrator(provider, verifier, config)
+        parsed_tasks: list[SearchTask] = []
+        invalid_responses: list[dict[str, Any]] = []
         for line in sys.stdin:
             try:
                 value = json.loads(line)
                 task = SearchTask.from_json(value)
-                resume = None
-                if options.resume_journal and options.journal_dir:
-                    checkpoint = Path(options.journal_dir) / f"{task.id}.json"
-                    if checkpoint.exists():
-                        resume = json.loads(checkpoint.read_text(encoding="utf-8"))
-                response = engine.search(task, resume=resume)
-                if options.journal_dir:
-                    journal = Path(options.journal_dir)
-                    journal.mkdir(parents=True, exist_ok=True)
-                    destination = journal / f"{task.id}.json"
-                    temporary = destination.with_suffix(".json.tmp")
-                    temporary.write_text(
-                        json.dumps(response, indent=2, sort_keys=True) + "\n",
-                        encoding="utf-8",
-                    )
-                    temporary.replace(destination)
+                parsed_tasks.append(task)
             except (json.JSONDecodeError, ValueError) as error:
-                response = {"version": 1, "id": "", "status": "invalid_task",
-                            "diagnostics": str(error)}
+                invalid_responses.append({
+                    "version": 1, "id": "", "status": "invalid_task",
+                    "diagnostics": str(error),
+                })
+        for response in invalid_responses:
+            print(json.dumps(response, separators=(",", ":")), flush=True)
+        run_store = RunStore(options.run_dir) if options.run_dir else None
+        run_state = run_store.create(parsed_tasks) if run_store else None
+        for task in parsed_tasks:
+            resume = None
+            if options.resume_journal and options.journal_dir:
+                checkpoint = Path(options.journal_dir) / f"{task.id}.json"
+                if checkpoint.exists():
+                    resume = json.loads(checkpoint.read_text(encoding="utf-8"))
+            if run_store and run_state:
+                run_store.record_task_started(run_state, task.id)
+            response = engine.search(task, resume=resume)
+            if options.journal_dir:
+                journal = Path(options.journal_dir)
+                journal.mkdir(parents=True, exist_ok=True)
+                destination = journal / f"{task.id}.json"
+                temporary = destination.with_suffix(".json.tmp")
+                temporary.write_text(
+                    json.dumps(response, indent=2, sort_keys=True) + "\n",
+                    encoding="utf-8",
+                )
+                temporary.replace(destination)
+            if run_store and run_state:
+                run_store.record_task_result(run_state, response)
             print(json.dumps(response, separators=(",", ":")), flush=True)
     except Exception as error:
         print(f"orchestrator failure: {error}", file=sys.stderr)

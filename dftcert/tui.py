@@ -62,6 +62,10 @@ def load_json_object(path: str | Path) -> dict[str, Any]:
     return value
 
 
+def load_json_value(path: str | Path) -> Any:
+    return json.loads(Path(path).read_text(encoding="utf-8"))
+
+
 def load_json_list(path: str | Path) -> list[dict[str, Any]]:
     value = json.loads(Path(path).read_text(encoding="utf-8"))
     if not isinstance(value, list) or any(not isinstance(item, dict) for item in value):
@@ -199,6 +203,142 @@ def report_lines(data: dict[str, Any], width: int) -> list[tuple[str, str]]:
     return lines
 
 
+def _short_json(value: Any, width: int) -> str:
+    text = json.dumps(value, sort_keys=True) if not isinstance(value, str) else value
+    text = " ".join(text.split())
+    return text if len(text) <= width else text[:max(0, width - 3)] + "..."
+
+
+def search_result_lines(data: dict[str, Any], width: int) -> list[tuple[str, str]]:
+    lines: list[tuple[str, str]] = []
+    status = str(data.get("status", "unknown"))
+    lines.append((f"SEARCH  {data.get('id', 'unknown')}  [{label(status)}]", status_color(status)))
+    lines.append((
+        f"model_calls={data.get('model_calls', 0)}  "
+        f"unique_candidates={data.get('unique_candidates', 0)}  "
+        f"rounds={data.get('rounds_used', 0)}",
+        "muted",
+    ))
+    task = data.get("task", {})
+    if isinstance(task, dict):
+        lines.append((f"target: {task.get('target') or '(generated obligation)'}", "muted"))
+        for line in wrap_lines(f"theorem: {task.get('theorem', '')}", width, indent=""):
+            lines.append((line, "muted"))
+        subgoals = task.get("subgoals", [])
+        if isinstance(subgoals, list) and subgoals:
+            lines.append(("", "muted"))
+            lines.append(("PROOF GRAPH / SUBGOAL DAG", "title"))
+            for item in subgoals:
+                if isinstance(item, dict):
+                    deps = ", ".join(item.get("depends_on", [])) if isinstance(item.get("depends_on"), list) else ""
+                    lines.append((f"◆ {item.get('id')}  deps=[{deps}]", "gap"))
+                    for line in wrap_lines(str(item.get("theorem", "")), width - 2, indent="  "):
+                        lines.append((line, "muted"))
+    lines.append(("", "muted"))
+    lines.append(("SUPERVISOR DECISIONS", "title"))
+    for decision in data.get("supervisor_decisions", []):
+        if isinstance(decision, dict):
+            lines.append((
+                f"■ r{decision.get('round')} {decision.get('action')} — {decision.get('reason')}",
+                "warn" if decision.get("action") == "stop" else "good",
+            ))
+            lines.append((f"  assignments: {_short_json(decision.get('assignments', {}), width - 2)}", "muted"))
+    lines.append(("", "muted"))
+    lines.append(("AGENT TURNS", "title"))
+    for turn in data.get("agent_turns", []):
+        if isinstance(turn, dict):
+            lines.append((
+                f"■ {turn.get('agent')} r{turn.get('round')} {turn.get('action')} [{label(turn.get('status'))}]",
+                status_color(str(turn.get("status"))),
+            ))
+            if turn.get("received_handoff_id"):
+                lines.append((f"  handoff: {turn['received_handoff_id']}", "gap"))
+            for line in wrap_lines(str(turn.get("output_summary", "")), width - 2, indent="  "):
+                lines.append((line, "muted"))
+    handoffs = data.get("handoffs", [])
+    receipts = data.get("handoff_receipts", [])
+    if handoffs or receipts:
+        lines.append(("", "muted"))
+        lines.append(("HANDOFFS", "title"))
+        for item in handoffs:
+            if isinstance(item, dict):
+                lines.append((
+                    f"↳ {item.get('id')} {item.get('from_agent')} -> {item.get('to_agent')} "
+                    f"node={item.get('node_id')} accepted={item.get('accepted')}",
+                    "gap",
+                ))
+        for item in receipts:
+            if isinstance(item, dict):
+                color = "good" if item.get("accepted") else "warn"
+                lines.append((
+                    f"✓ {item.get('handoff_id')} receiver={item.get('receiver_agent')} "
+                    f"accepted={item.get('accepted')}",
+                    color,
+                ))
+                for line in wrap_lines(str(item.get("receiver_summary", "")), width - 2, indent="  "):
+                    lines.append((line, "muted"))
+    scorecard = data.get("agent_scorecard", {})
+    if isinstance(scorecard, dict) and scorecard:
+        lines.append(("", "muted"))
+        lines.append(("SCORECARD", "title"))
+        for agent, stats in scorecard.items():
+            lines.append((f"■ {agent}: {_short_json(stats, width - len(agent) - 4)}", "muted"))
+    attempts = data.get("attempts", [])
+    if attempts:
+        lines.append(("", "muted"))
+        lines.append(("LEAN DIAGNOSTICS", "title"))
+        for attempt in attempts:
+            if isinstance(attempt, dict):
+                color = status_color(str(attempt.get("status")))
+                lines.append((
+                    f"■ {attempt.get('id')} [{label(attempt.get('status'))}]",
+                    color,
+                ))
+                diagnostics = str(attempt.get("diagnostics", "")) or "(none)"
+                for line in wrap_lines(diagnostics, width - 2, indent="  "):
+                    lines.append((line, "muted"))
+    certificate = data.get("certificate_report")
+    if isinstance(certificate, dict):
+        lines.append(("", "muted"))
+        lines.append(("CERTIFICATE STATUS", "title"))
+        cert_status = str(certificate.get("status", "unknown"))
+        lines.append((f"status: {label(cert_status)}", status_color(cert_status)))
+    return lines
+
+
+def run_inspector_lines(data: dict[str, Any], width: int) -> list[tuple[str, str]]:
+    state = data.get("state", {})
+    lines: list[tuple[str, str]] = []
+    status = str(state.get("status", "unknown")) if isinstance(state, dict) else "unknown"
+    lines.append((f"RUN  {state.get('run_id', 'unknown') if isinstance(state, dict) else 'unknown'}  [{label(status)}]", status_color(status)))
+    if isinstance(state, dict):
+        lines.append(("", "muted"))
+        lines.append(("TASK QUEUE", "title"))
+        for item in state.get("tasks", []):
+            if isinstance(item, dict):
+                lines.append((
+                    f"■ {item.get('task_id')} [{label(item.get('status'))}] artifact={item.get('artifact')}",
+                    status_color(str(item.get("status"))),
+                ))
+        if state.get("blocked"):
+            lines.append(("", "muted"))
+            lines.append(("BLOCKED", "warn"))
+            for item in state.get("blocked", []):
+                if isinstance(item, dict):
+                    lines.append((f"! {item.get('task_id')} [{label(item.get('status'))}]", "warn"))
+        if state.get("completed"):
+            lines.append(("", "muted"))
+            lines.append(("COMPLETED", "good"))
+            for item in state.get("completed", []):
+                if isinstance(item, dict):
+                    lines.append((f"✓ {item.get('task_id')} [{label(item.get('status'))}]", "good"))
+    for artifact in data.get("artifacts", []):
+        if isinstance(artifact, dict):
+            lines.append(("", "muted"))
+            lines.extend(search_result_lines(artifact, width))
+    return lines
+
+
 def coverage_lines(data: dict[str, Any], width: int) -> list[tuple[str, str]]:
     lines: list[tuple[str, str]] = [
         (f"POLICY  {data['policy']['id']} v{data['policy']['version']}", "title"),
@@ -222,7 +362,12 @@ def coverage_lines(data: dict[str, Any], width: int) -> list[tuple[str, str]]:
 
 def render_plain(data: dict[str, Any], *, coverage: bool = False,
                  width: int = 100) -> str:
-    source = coverage_lines(data, width) if coverage else report_lines(data, width)
+    if data.get("inspector_kind") == "search_result":
+        source = search_result_lines(data["result"], width)
+    elif data.get("inspector_kind") == "run":
+        source = run_inspector_lines(data, width)
+    else:
+        source = coverage_lines(data, width) if coverage else report_lines(data, width)
     return "\n".join(text for text, _ in source)
 
 
@@ -379,14 +524,20 @@ class TuiApp:
         title = (
             "coverage" if self.mode == "coverage"
             else "artifact report" if self.mode == "artifact"
+            else "agentic run inspector" if self.mode == "inspector"
             else "draft sanity report"
         )
         self._box(screen, 2, left_w + 2, height - 3, right_w, title)
-        source = (
-            coverage_lines(self.data, right_w - 4)
-            if self.mode == "coverage"
-            else report_lines(self.data, right_w - 4)
-        )
+        if self.mode == "coverage":
+            source = coverage_lines(self.data, right_w - 4)
+        elif self.mode == "inspector":
+            source = (
+                search_result_lines(self.data["result"], right_w - 4)
+                if self.data.get("inspector_kind") == "search_result"
+                else run_inspector_lines(self.data, right_w - 4)
+            )
+        else:
+            source = report_lines(self.data, right_w - 4)
         visible = source[self.scroll:self.scroll + height - 7]
         for row, (text, color) in enumerate(visible):
             screen.addstr(4 + row, left_w + 4, text[:right_w - 4], self._attr(color))
@@ -403,6 +554,8 @@ def arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--manifest")
     parser.add_argument("--proof-results")
     parser.add_argument("--certificate-report")
+    parser.add_argument("--search-result")
+    parser.add_argument("--run-dir")
     parser.add_argument("--coverage", action="store_true")
     parser.add_argument(
         "--once", action="store_true",
@@ -410,6 +563,51 @@ def arguments(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--width", type=int, default=100)
     return parser.parse_args(argv)
+
+
+def build_search_inspector(path: str | Path) -> dict[str, Any]:
+    value = load_json_value(path)
+    if isinstance(value, dict):
+        return {"inspector_kind": "search_result", "result": value}
+    if isinstance(value, list) and all(isinstance(item, dict) for item in value):
+        return {
+            "inspector_kind": "run",
+            "state": {
+                "run_id": str(path),
+                "status": "loaded_artifacts",
+                "tasks": [
+                    {
+                        "task_id": item.get("id", "unknown"),
+                        "status": item.get("status", "unknown"),
+                        "artifact": str(path),
+                    }
+                    for item in value
+                ],
+                "blocked": [
+                    {"task_id": item.get("id", "unknown"), "status": item.get("status", "unknown")}
+                    for item in value
+                    if item.get("status") not in {"verified", "approved"}
+                ],
+                "completed": [
+                    {"task_id": item.get("id", "unknown"), "status": item.get("status", "unknown")}
+                    for item in value
+                    if item.get("status") in {"verified", "approved"}
+                ],
+            },
+            "artifacts": value,
+        }
+    raise ValueError(f"{path} must contain a search object or array of search objects")
+
+
+def build_run_inspector(path: str | Path) -> dict[str, Any]:
+    root = Path(path)
+    state = load_json_object(root / "state.json")
+    artifacts: list[dict[str, Any]] = []
+    artifact_root = root / "artifacts"
+    if artifact_root.exists():
+        for artifact in sorted(artifact_root.glob("*.json")):
+            artifacts.append(load_json_object(artifact))
+    return {"inspector_kind": "run", "state": state, "artifacts": artifacts}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -421,6 +619,18 @@ def main(argv: list[str] | None = None) -> int:
             print(render_plain(data, coverage=True, width=options.width))
             return 0
         mode = "coverage"
+    elif options.search_result:
+        data = build_search_inspector(options.search_result)
+        if options.once:
+            print(render_plain(data, width=options.width))
+            return 0
+        mode = "inspector"
+    elif options.run_dir:
+        data = build_run_inspector(options.run_dir)
+        if options.once:
+            print(render_plain(data, width=options.width))
+            return 0
+        mode = "inspector"
     elif options.manifest:
         data = build_artifact_report(
             policy=policy,

@@ -1,5 +1,50 @@
 {
-  "direct": "Prefer short definitional, simplification, constructor, and exact proofs.",
-  "automation": "Explore appropriate Lean tactics and library automation; avoid placeholders.",
-  "structural": "Look for introductions, cases, induction, rewriting, and intermediate facts."
+  "direct": {
+    "kind": "proposer",
+    "model": "default",
+    "tools": ["lean_diagnostics", "frontier_read", "candidate_submit"],
+    "temperature": 0.2,
+    "max_candidates": 2,
+    "handoff_targets": ["automation", "structural"],
+    "instructions": "Prefer short definitional, simplification, constructor, and exact proofs."
+  },
+  "automation": {
+    "kind": "proposer",
+    "model": "default",
+    "tools": ["lean_diagnostics", "frontier_read", "candidate_submit"],
+    "temperature": 0.3,
+    "max_candidates": 2,
+    "handoff_targets": ["structural", "direct"],
+    "instructions": "Explore appropriate Lean tactics and library automation; avoid placeholders."
+  },
+  "structural": {
+    "kind": "proposer",
+    "model": "default",
+    "tools": ["lean_diagnostics", "frontier_read", "candidate_submit"],
+    "temperature": 0.25,
+    "max_candidates": 2,
+    "handoff_targets": ["direct", "automation"],
+    "instructions": "Look for introductions, cases, induction, rewriting, and intermediate facts."
+  },
+  "critic": {
+    "kind": "critic",
+    "model": "default",
+    "tools": ["candidate_rank", "frontier_read"],
+    "temperature": 0.0,
+    "instructions": "Rank candidate proof patches by likely Lean success. Include every candidate ID exactly once. Do not assert proof success."
+  },
+  "decomposer": {
+    "kind": "decomposer",
+    "model": "default",
+    "tools": ["task_decompose", "policy_read"],
+    "temperature": 0.1,
+    "instructions": "Convert theorem/hypothesis context into a claim graph, formal obligations, a subgoal DAG, and proof tasks. Keep IDs stable and dependency edges explicit."
+  },
+  "reporter": {
+    "kind": "reporter",
+    "model": "default",
+    "tools": ["trace_read", "report_write"],
+    "temperature": 0.0,
+    "instructions": "Summarize completed runs from trace artifacts only. Do not change verification status."
+  }
 }

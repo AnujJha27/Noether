@@ -13,19 +13,55 @@ The orchestrator now records this as an explicit agentic framework trace:
 
 - `supervisor_decisions`: deterministic per-round decisions, assignments, and
   budget state;
-- `agent_turns`: one structured turn per proposer role, including inherited
-  node, received handoff, action, status, candidate IDs, and errors;
+- `agent_turns`: one structured turn per proposer, critic, or decomposer role,
+  including inherited node, received handoff, action, status, candidate IDs,
+  and errors;
 - `handoffs`: end-of-round handoff objects from the agent that produced a
   retained frontier node to the next assigned repair role;
+- `handoff_receipts`: explicit receiver accept/refuse records with summary,
+  plan, and risks;
 - `agent_scorecard`: per-agent turns, candidate counts, verifier outcomes, and
   success rate;
-- optional `subgoals` on a task: a dependency DAG passed into proposer prompts
-  and supervisor state for decomposition-aware search.
+- `model_call_records`: every provider prompt, schema, response/error, agent,
+  model route, and call index;
+- `memory`: run-scoped failed tactics, useful lemmas, successful proof
+  patterns, theorem notes, and score history;
+- `task.subgoals`: a dependency DAG supplied by the user or produced by the
+  decomposer before proof search.
 
 The critic influences ordering, but Lean remains the only success oracle.
 Failed attempts with fewer unsolved goals can remain on the frontier, while
 timeouts and worker failures are penalized. Search results include the entire
 graph and current frontier.
+
+## Agent registry and permissions
+
+`orchestrator/roles.json` is now a structured agent registry. Legacy
+`{"direct": "instructions"}` files still load, but structured entries can
+define agent kind, model route, tools, temperature, candidate budget, and
+handoff targets:
+
+```json
+{
+  "direct": {
+    "kind": "proposer",
+    "model": "default",
+    "tools": ["lean_diagnostics", "frontier_read", "candidate_submit"],
+    "temperature": 0.2,
+    "max_candidates": 2,
+    "handoff_targets": ["automation", "structural"],
+    "instructions": "Prefer short definitional and simplification proofs."
+  }
+}
+```
+
+Structured agents use exactly their declared tools. Legacy string roles receive
+safe default permissions for compatibility. There is intentionally no
+`mark_success` tool; only the verifier can return `verified`.
+
+The first-class decomposer can turn a theorem/hypothesis into a subgoal DAG
+before proposal rounds. The proposer prompt receives the DAG plus concrete run
+memory, not vague chat state.
 
 Persist and resume searches:
 
@@ -37,6 +73,22 @@ python3 -m orchestrator.cli ... \
 
 Journal updates are atomic. Resumed tasks restore all patches, diagnostics,
 lineage edges, and frontier state before allocating new model calls.
+
+For multi-task durable runs above individual theorem search:
+
+```bash
+python3 -m orchestrator.cli ... \
+  --run-dir build/runs/my-model \
+  < tasks.jsonl > results.jsonl
+```
+
+The run directory contains `state.json`, `events.jsonl`, and per-task artifacts.
+Inspect or replay it with:
+
+```bash
+proof-vibe tui --run-dir build/runs/my-model --once
+proof-vibe replay build/runs/my-model
+```
 
 The orchestrator is a provider-neutral Python 3 layer above `build/proof-search`. It uses multiple LLM roles to generate and rank Lean patches, asks the C++ service to verify them, and feeds Lean diagnostics into later repair rounds.
 
@@ -100,7 +152,7 @@ The adapter receives:
 
 ```json
 {
-  "agent": "proposer:direct",
+  "agent": "direct",
   "system": "role instructions",
   "prompt": "the proof-search prompt",
   "schema": {"type": "object"}
@@ -117,6 +169,12 @@ The critic must return:
 
 ```json
 {"ordered_ids":["search-42-r1-direct-1"],"feedback":"shortest candidate first"}
+```
+
+The decomposer must return:
+
+```json
+{"subgoals":[{"id":"lemma-a","theorem":"theorem a : True","depends_on":[]}]}
 ```
 
 This small contract keeps model SDKs, authentication, and vendor-specific response formats outside the search engine. The command can call a local WSL model, a Windows executable through `/mnt/c`, or a hosted-model SDK.
@@ -156,9 +214,13 @@ Useful CLI controls:
 --verify-parallelism 4
 --frontier-width 6
 --provider-timeout-s 120
+--agents-file orchestrator/roles.json
 --roles-file orchestrator/roles.json
 ```
 
 The result includes every candidate, Lean status and diagnostics, critic events, cache flags, model-call count, and the winning patch. `sorry` and `admit` candidates are rejected before verification.
 
-Proposer names and strategy instructions are data in `orchestrator/roles.json`, not branches in the engine. Supply another JSON object with `--roles-file` to add, remove, or replace roles without changing code.
+Agent names, tool permissions, strategy instructions, model routes, and handoff
+targets are data in `orchestrator/roles.json`, not branches in the engine.
+Supply another JSON object with `--agents-file` to add, remove, or replace
+agents without changing code.

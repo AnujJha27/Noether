@@ -98,6 +98,9 @@ class SearchTask:
             subgoals=normalized_subgoals,
         )
 
+    def to_json(self) -> dict[str, Any]:
+        return asdict(self)
+
 
 @dataclass(slots=True)
 class Candidate:
@@ -164,6 +167,20 @@ class Handoff:
     reason: str
     state_summary: str
     accepted: bool = False
+
+    def to_json(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+@dataclass(slots=True)
+class HandoffReceipt:
+    handoff_id: str
+    round: int
+    receiver_agent: str
+    accepted: bool
+    receiver_summary: str
+    plan: str
+    risks: list[str] = field(default_factory=list)
 
     def to_json(self) -> dict[str, Any]:
         return asdict(self)

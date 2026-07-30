@@ -69,12 +69,17 @@ def parser() -> argparse.ArgumentParser:
     status = commands.add_parser("status")
     status.add_argument("run_dir")
 
+    replay = commands.add_parser("replay")
+    replay.add_argument("path")
+
     tui = commands.add_parser("tui")
     tui.add_argument("--model-id", default="terminal-hypothesis")
     tui.add_argument("--hypothesis")
     tui.add_argument("--manifest")
     tui.add_argument("--proof-results")
     tui.add_argument("--certificate-report")
+    tui.add_argument("--search-result")
+    tui.add_argument("--run-dir")
     tui.add_argument("--coverage", action="store_true")
     tui.add_argument("--once", action="store_true")
     return root
@@ -167,11 +172,19 @@ def main(argv: list[str] | None = None) -> int:
                 args.extend(["--proof-results", options.proof_results])
             if options.certificate_report:
                 args.extend(["--certificate-report", options.certificate_report])
+            if options.search_result:
+                args.extend(["--search-result", options.search_result])
+            if options.run_dir:
+                args.extend(["--run-dir", options.run_dir])
             if options.coverage:
                 args.append("--coverage")
             if options.once:
                 args.append("--once")
             return tui_main(args)
+        elif options.command == "replay":
+            from orchestrator.replay import replay_path
+            print(replay_path(options.path))
+            return 0
         else:
             run = LocalRun(options.run_dir)
             config = LocalPipelineConfig(

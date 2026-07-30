@@ -4,7 +4,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 from typing import Any
 
-from .models import AgentTurn, Attempt, Handoff, SearchNode, SupervisorDecision
+from .models import AgentTurn, Attempt, Handoff, HandoffReceipt, SearchNode, SupervisorDecision
 
 
 @dataclass(frozen=True, slots=True)
@@ -12,6 +12,7 @@ class AgentAssignment:
     role: str
     parent: SearchNode | None
     handoff: Handoff | None
+    receipt: HandoffReceipt | None = None
 
 
 class SupervisorPolicy:
@@ -21,10 +22,15 @@ class SupervisorPolicy:
     local supervisor owns budgets, frontier assignment, and handoff accounting.
     """
 
-    def __init__(self, roles: list[str]):
+    def __init__(
+        self,
+        roles: list[str],
+        handoff_targets: dict[str, list[str]] | None = None,
+    ):
         if not roles:
             raise ValueError("supervisor requires at least one role")
         self.roles = roles
+        self.handoff_targets = handoff_targets or {}
 
     def decide(
         self,
@@ -105,13 +111,43 @@ class SupervisorPolicy:
         for index, role in enumerate(self.roles):
             handoff = by_target.get(role)
             parent = None
+            receipt = None
             if handoff is not None:
                 parent = node_by_id.get(handoff.node_id)
                 if parent is not None:
                     handoff.accepted = True
+                    receipt = HandoffReceipt(
+                        handoff_id=handoff.id,
+                        round=round_number,
+                        receiver_agent=role,
+                        accepted=True,
+                        receiver_summary=(
+                            f"accepted {handoff.node_id} from {handoff.from_agent}: "
+                            f"{handoff.reason}"
+                        ),
+                        plan="repair or extend the inherited frontier node using Lean diagnostics",
+                        risks=[
+                            "inherited diagnostics may indicate a wrong proof direction",
+                            "candidate budget may expire before repair succeeds",
+                        ],
+                    )
+                else:
+                    receipt = HandoffReceipt(
+                        handoff_id=handoff.id,
+                        round=round_number,
+                        receiver_agent=role,
+                        accepted=False,
+                        receiver_summary=(
+                            f"refused {handoff.node_id}; node is not in the current frontier"
+                        ),
+                        plan="fall back to the supervisor frontier assignment",
+                        risks=["handoff target became stale during resume or frontier pruning"],
+                    )
             if parent is None and frontier:
                 parent = frontier[index % len(frontier)]
-            assignments.append(AgentAssignment(role=role, parent=parent, handoff=handoff))
+            assignments.append(
+                AgentAssignment(role=role, parent=parent, handoff=handoff, receipt=receipt)
+            )
         return assignments
 
     def create_handoffs(
@@ -125,11 +161,18 @@ class SupervisorPolicy:
             return handoffs
         for index, node in enumerate(frontier):
             from_agent = node.candidate.agent
-            try:
-                start = self.roles.index(from_agent) + 1
-            except ValueError:
-                start = index + 1
-            to_agent = self.roles[start % len(self.roles)]
+            targets = [
+                target for target in self.handoff_targets.get(from_agent, [])
+                if target in self.roles and target != from_agent
+            ]
+            if targets:
+                to_agent = targets[0]
+            else:
+                try:
+                    start = self.roles.index(from_agent) + 1
+                except ValueError:
+                    start = index + 1
+                to_agent = self.roles[start % len(self.roles)]
             reason = (
                 "frontier node retained for repair after Lean diagnostics"
                 if node.status != "verified"
