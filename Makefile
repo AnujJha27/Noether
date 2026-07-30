@@ -17,7 +17,7 @@ BENCH_SRC := src/benchmark.cpp $(CORE_SRC)
 
 .PHONY: all test benchmark benchmark-repeat clean lean orchestrator-test dftcert-test dftcert-example \
 	dftcert-obligations dftcert-assemble-example dftcert-certify-example \
-	dftcert-search-example sanity-demo tui wsl-smoke
+	dftcert-search-example sanity-demo tui wsl-smoke noether-demo
 
 all: $(BUILD)/proof-search
 
@@ -94,6 +94,9 @@ sanity-demo:
 
 tui:
 	python3 -m dftcert.tui
+
+noether-demo: $(BUILD)/proof-search lean
+	./noether demo physics-toy
 
 test: $(BUILD)/proof-search $(BUILD)/tests lean orchestrator-test dftcert-test
 	$(BUILD)/tests

@@ -1,0 +1,50 @@
+{
+  "direct": {
+    "kind": "proposer",
+    "model": "lean-careful",
+    "tools": ["lean_diagnostics", "frontier_read", "candidate_submit"],
+    "temperature": 0.15,
+    "max_candidates": 2,
+    "handoff_targets": ["structural", "automation"],
+    "instructions": "Prefer short proofs using exact, constructor, intro, rfl, cases, and simp. Keep the proof body complete and avoid unnecessary tactics."
+  },
+  "structural": {
+    "kind": "proposer",
+    "model": "lean-careful",
+    "tools": ["lean_diagnostics", "frontier_read", "candidate_submit"],
+    "temperature": 0.25,
+    "max_candidates": 2,
+    "handoff_targets": ["automation", "direct"],
+    "instructions": "Exploit theorem structure: construct records, split conjunction-like goals, introduce binders, case-split structures, and reduce record projections."
+  },
+  "automation": {
+    "kind": "proposer",
+    "model": "lean-fast",
+    "tools": ["lean_diagnostics", "frontier_read", "candidate_submit"],
+    "temperature": 0.35,
+    "max_candidates": 2,
+    "handoff_targets": ["direct", "structural"],
+    "instructions": "Try compact automation-oriented proofs with simp, dsimp, cases, constructor, and local unfolding. Do not use sorry, admit, or unsafe axioms."
+  },
+  "critic": {
+    "kind": "critic",
+    "model": "critic-fast",
+    "tools": ["candidate_rank", "frontier_read"],
+    "temperature": 0.0,
+    "instructions": "Rank complete Lean proof bodies by likely verifier success. Prefer simple, target-specific patches. Include every candidate ID exactly once. Never claim proof success."
+  },
+  "decomposer": {
+    "kind": "decomposer",
+    "model": "planner",
+    "tools": ["task_decompose", "policy_read"],
+    "temperature": 0.1,
+    "instructions": "Break theorem statements into a claim graph, formal obligations, and a subgoal DAG. Use stable IDs and explicit dependency edges. Keep subgoals close to the target theorem."
+  },
+  "reporter": {
+    "kind": "reporter",
+    "model": "critic-fast",
+    "tools": ["trace_read", "report_write"],
+    "temperature": 0.0,
+    "instructions": "Summarize run artifacts and verifier outcomes without changing statuses."
+  }
+}

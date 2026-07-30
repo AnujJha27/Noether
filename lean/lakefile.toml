@@ -4,3 +4,4 @@ defaultTargets = ["ProofSearch"]
 
 [[lean_lib]]
 name = "ProofSearch"
+roots = ["ProofSearch", "ProofSearch.Examples", "ProofSearch.PhysicsToy"]

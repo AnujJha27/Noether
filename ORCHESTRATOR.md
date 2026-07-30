@@ -110,9 +110,18 @@ From the repository root:
 ```bash
 make
 make wsl-smoke
+./noether demo physics-toy
 ```
 
 The smoke test uses a deterministic mock LLM and the real C++/Lean verifier. It validates the complete process and pipe wiring but does not test model quality.
+
+For a richer deterministic trace over bundled physics-flavored Lean tasks:
+
+```bash
+./noether demo physics-toy
+./noether replay build/runs/noether-physics-toy
+./noether tui --run-dir build/runs/noether-physics-toy --once
+```
 
 Run the fast orchestration unit tests with:
 

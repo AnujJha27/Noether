@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
+import shlex
 import shutil
+import subprocess
 import sys
 from pathlib import Path
 from typing import Any
@@ -78,6 +81,18 @@ def parser() -> argparse.ArgumentParser:
     )
     agentic.add_argument("orchestrator_args", nargs=argparse.REMAINDER)
 
+    demo = commands.add_parser("demo", help="run a bundled Noether workflow demo")
+    demo.add_argument(
+        "kind",
+        nargs="?",
+        choices=("physics-toy", "dft"),
+        default="physics-toy",
+    )
+    demo.add_argument("--run-dir")
+    demo.add_argument("--project", help="required for dft unless DFT_PROJECT is set")
+    demo.add_argument("--max-rounds", type=int, default=1)
+    demo.add_argument("--verifier", default=str(ROOT / "build/proof-search"))
+
     tui = commands.add_parser("tui")
     tui.add_argument("--model-id", default="terminal-hypothesis")
     tui.add_argument("--hypothesis")
@@ -151,6 +166,85 @@ def _summary(state: dict[str, Any], run: LocalRun) -> dict[str, Any]:
     }
 
 
+def _run_demo(options: argparse.Namespace) -> int:
+    verifier = Path(options.verifier)
+    if not verifier.exists():
+        raise ValueError(f"verifier not found at {verifier}; run `make` first")
+    demo_adapter = ROOT / "examples/orchestrator/noether_demo_llm.py"
+    agents = ROOT / "examples/orchestrator/agents.research.json"
+    if options.kind == "physics-toy":
+        tasks = ROOT / "examples/orchestrator/physics-toy-tasks.jsonl"
+        run_dir = options.run_dir or str(ROOT / "build/runs/noether-physics-toy")
+        env = os.environ.copy()
+    else:
+        tasks = ROOT / "examples/dft/noether-obligations.jsonl"
+        project = options.project or os.environ.get("DFT_PROJECT")
+        if not project:
+            raise ValueError("DFT demo requires --project or DFT_PROJECT")
+        run_dir = options.run_dir or str(ROOT / "build/runs/noether-dft")
+        env = os.environ.copy()
+        env.update({
+            "PROOF_SEARCH_ALLOW_GENERATED_OBLIGATIONS": "1",
+            "PROOF_SEARCH_PROJECT_DIR": str(Path(project).resolve()),
+            "PROOF_SEARCH_DB": str(Path(run_dir).resolve() / "proof-search.db"),
+        })
+    command = [
+        sys.executable, "-m", "orchestrator.cli",
+        "--provider", "command",
+        "--llm-command", f"{shlex.quote(sys.executable)} {shlex.quote(str(demo_adapter))}",
+        "--verifier", str(verifier),
+        "--agents-file", str(agents),
+        "--run-dir", run_dir,
+        "--max-rounds", str(options.max_rounds),
+        "--agent-parallelism", "1",
+    ]
+    input_text = tasks.read_text(encoding="utf-8")
+    process = subprocess.run(
+        command,
+        input=input_text,
+        text=True,
+        cwd=ROOT,
+        env=env,
+        capture_output=True,
+        check=False,
+    )
+    if process.returncode != 0:
+        if process.stdout:
+            print(process.stdout, end="")
+        if process.stderr:
+            print(process.stderr, end="", file=sys.stderr)
+        return process.returncode
+    result_lines = [
+        line for line in process.stdout.splitlines()
+        if line.strip()
+    ]
+    statuses = []
+    for line in result_lines:
+        try:
+            item = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        statuses.append({
+            "id": item.get("id"),
+            "status": item.get("status"),
+        })
+    Path(run_dir).mkdir(parents=True, exist_ok=True)
+    (Path(run_dir) / "results.jsonl").write_text(
+        "\n".join(result_lines) + ("\n" if result_lines else ""),
+        encoding="utf-8",
+    )
+    print(json.dumps({
+        "status": "demo_complete",
+        "kind": options.kind,
+        "run_dir": run_dir,
+        "tasks": statuses,
+        "results": str(Path(run_dir) / "results.jsonl"),
+        "replay": f"./noether replay {run_dir}",
+        "inspect": f"./noether tui --run-dir {run_dir} --once",
+    }, sort_keys=True))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         raw_args = list(argv) if argv is not None else sys.argv[1:]
@@ -200,6 +294,8 @@ def main(argv: list[str] | None = None) -> int:
         elif options.command == "agentic":
             from orchestrator.cli import main as orchestrator_main
             return orchestrator_main(options.orchestrator_args)
+        elif options.command == "demo":
+            return _run_demo(options)
         else:
             run = LocalRun(options.run_dir)
             config = LocalPipelineConfig(

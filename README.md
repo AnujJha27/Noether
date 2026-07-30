@@ -91,6 +91,14 @@ noether replay build/runs/demo
 noether tui --run-dir build/runs/demo --once
 ```
 
+Run the bundled one-command demo:
+
+```bash
+make noether-demo
+# or directly:
+./noether demo physics-toy
+```
+
 Run its WSL end-to-end smoke test with:
 
 ```bash

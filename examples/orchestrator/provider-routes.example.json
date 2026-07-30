@@ -1,0 +1,23 @@
+{
+  "lean-careful": {
+    "provider": "command",
+    "command": ["/path/to/lean_adapter", "--model", "lean-careful"],
+    "timeout_s": 180
+  },
+  "lean-fast": {
+    "provider": "command",
+    "command": ["/path/to/lean_adapter", "--model", "lean-fast"],
+    "timeout_s": 90
+  },
+  "critic-fast": {
+    "provider": "command",
+    "command": ["/path/to/lean_adapter", "--model", "critic-fast"],
+    "timeout_s": 60
+  },
+  "planner": {
+    "provider": "http",
+    "url": "http://127.0.0.1:8080/generate",
+    "token_env": "LLM_API_TOKEN",
+    "timeout_s": 120
+  }
+}
