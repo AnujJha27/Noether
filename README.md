@@ -1,6 +1,6 @@
-# Proof Vibe
+# Noether
 
-Proof Vibe is a local research prototype for Lean proof-attempt verification,
+Noether is a local research prototype for Lean proof-attempt verification,
 LLM-driven proof-search orchestration, and policy-driven DFT architecture
 certification. The key boundary is simple: LLMs and extraction tools can propose
 claims or proof patches, but Lean is the authoritative proof checker.

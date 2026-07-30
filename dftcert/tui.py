@@ -547,7 +547,7 @@ class TuiApp:
 
 
 def arguments(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Terminal UI for Proof Vibe")
+    parser = argparse.ArgumentParser(description="Terminal UI for Noether")
     parser.add_argument("--policy", default=str(DEFAULT_POLICY))
     parser.add_argument("--model-id", default="terminal-hypothesis")
     parser.add_argument("--hypothesis", default=DEFAULT_HYPOTHESIS)

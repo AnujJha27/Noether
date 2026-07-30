@@ -220,7 +220,7 @@ No server or upload API is involved. Start a certification directly from an
 already confirmed/extracted manifest:
 
 ```bash
-./proof-vibe certify \
+./noether certify \
   --run-dir build/runs/my-model \
   --manifest examples/dft/example-manifest.json \
   --project /path/to/Testv2/project \
@@ -236,8 +236,8 @@ If proof search exhausts its current round budget or the process is stopped,
 continue on the same frontier without repeating completed obligations:
 
 ```bash
-./proof-vibe resume build/runs/my-model
-./proof-vibe status build/runs/my-model
+./noether resume build/runs/my-model
+./noether status build/runs/my-model
 ```
 
 English input can be confirmed and run locally in one command by supplying

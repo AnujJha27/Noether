@@ -1,5 +1,5 @@
 [project]
-name = "proof-vibe"
+name = "noether"
 version = "0.1.0"
 description = "Lean proof-search verifier and DFT architecture certification research prototype"
 readme = "README.md"
@@ -20,10 +20,10 @@ classifiers = [
 
 [project.scripts]
 noether = "dftcert.local_cli:main"
-proof-vibe-dftcert = "dftcert.cli:main"
-proof-vibe-orchestrator = "orchestrator.cli:main"
-proof-vibe-replay = "orchestrator.replay:main"
-proof-vibe-tui = "dftcert.tui:main"
+noether-dftcert = "dftcert.cli:main"
+noether-orchestrator = "orchestrator.cli:main"
+noether-replay = "orchestrator.replay:main"
+noether-tui = "dftcert.tui:main"
 
 [tool.setuptools]
 packages = ["dftcert", "orchestrator", "extractors"]

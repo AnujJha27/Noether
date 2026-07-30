@@ -1,1 +1,1 @@
-"""Artifact extraction helpers for the Proof Vibe DFT certification prototype."""
+"""Artifact extraction helpers for the Noether DFT certification prototype."""
