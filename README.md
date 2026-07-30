@@ -99,6 +99,32 @@ make noether-demo
 ./noether demo physics-toy
 ```
 
+Run the demo through a free-model API route:
+
+```bash
+./noether demo physics-toy --llm openrouter-free
+```
+
+Noether loads `.env` from the repo root for demo credentials. Keep real keys in
+`.env`; commit only `.env.example`.
+
+Run it against a cluster-hosted OpenAI-compatible model:
+
+```bash
+export NOETHER_OPENAI_BASE_URL="http://cluster-node:8000/v1"
+export NOETHER_OPENAI_MODEL="local-lean-coder"
+./noether demo physics-toy --llm openai-compatible
+```
+
+On the Maestro cluster, use the built-in presets:
+
+```bash
+./noether demo physics-toy --llm maestro
+./noether demo physics-toy --llm piano
+./noether demo physics-toy --llm sitar
+./noether demo physics-toy --llm violin
+```
+
 Run its WSL end-to-end smoke test with:
 
 ```bash

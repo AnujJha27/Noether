@@ -23,6 +23,24 @@ from .sandbox import BubblewrapExtractor
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_POLICY = ROOT / "policies/dft-architecture-v1.json"
+CLUSTER_LLM_PRESETS = {
+    "maestro": {
+        "base_url": "http://127.0.0.1:11434/v1/chat/completions",
+        "model": "qwen3.6-64k:latest",
+    },
+    "piano": {
+        "base_url": "http://pianoteg:11437/v1/chat/completions",
+        "model": "qwen3.6:27b-q4_K_M",
+    },
+    "sitar": {
+        "base_url": "http://sitarteg:11437/v1/chat/completions",
+        "model": "qwen2.5-coder:14b-instruct-q4_K_M",
+    },
+    "violin": {
+        "base_url": "http://violinteg:11437/v1/chat/completions",
+        "model": "qwen3.6-64k:latest",
+    },
+}
 
 
 def _object(path: str) -> dict[str, Any]:
@@ -92,6 +110,25 @@ def parser() -> argparse.ArgumentParser:
     demo.add_argument("--project", help="required for dft unless DFT_PROJECT is set")
     demo.add_argument("--max-rounds", type=int, default=1)
     demo.add_argument("--verifier", default=str(ROOT / "build/proof-search"))
+    demo.add_argument(
+        "--llm",
+        choices=(
+            "deterministic",
+            "openrouter-free",
+            "openai-compatible",
+            "maestro",
+            "piano",
+            "sitar",
+            "violin",
+        ),
+        default="deterministic",
+        help="model backend for the demo",
+    )
+    demo.add_argument(
+        "--model",
+        default=None,
+        help="model slug for --llm openrouter-free",
+    )
 
     tui = commands.add_parser("tui")
     tui.add_argument("--model-id", default="terminal-hypothesis")
@@ -166,11 +203,28 @@ def _summary(state: dict[str, Any], run: LocalRun) -> dict[str, Any]:
     }
 
 
+def _load_env_file(path: Path) -> None:
+    if not path.exists():
+        return
+    for raw_line in path.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        name, value = line.split("=", 1)
+        name = name.strip()
+        value = value.strip().strip('"').strip("'")
+        if name and name not in os.environ:
+            os.environ[name] = value
+
+
 def _run_demo(options: argparse.Namespace) -> int:
+    _load_env_file(ROOT / ".env")
     verifier = Path(options.verifier)
     if not verifier.exists():
         raise ValueError(f"verifier not found at {verifier}; run `make` first")
     demo_adapter = ROOT / "examples/orchestrator/noether_demo_llm.py"
+    openrouter_adapter = ROOT / "examples/orchestrator/openrouter_free_adapter.py"
+    openai_compatible_adapter = ROOT / "examples/orchestrator/openai_compatible_adapter.py"
     agents = ROOT / "examples/orchestrator/agents.research.json"
     if options.kind == "physics-toy":
         tasks = ROOT / "examples/orchestrator/physics-toy-tasks.jsonl"
@@ -188,10 +242,30 @@ def _run_demo(options: argparse.Namespace) -> int:
             "PROOF_SEARCH_PROJECT_DIR": str(Path(project).resolve()),
             "PROOF_SEARCH_DB": str(Path(run_dir).resolve() / "proof-search.db"),
         })
+    if options.llm == "openrouter-free":
+        if not os.environ.get("OPENROUTER_API_KEY"):
+            raise ValueError("OPENROUTER_API_KEY is required for --llm openrouter-free")
+        llm_command = f"{shlex.quote(sys.executable)} {shlex.quote(str(openrouter_adapter))}"
+        env["OPENROUTER_MODEL"] = options.model or "openrouter/free"
+    elif options.llm in {"openai-compatible", *CLUSTER_LLM_PRESETS}:
+        preset = CLUSTER_LLM_PRESETS.get(options.llm)
+        if preset:
+            env["NOETHER_OPENAI_BASE_URL"] = preset["base_url"]
+            env["NOETHER_OPENAI_MODEL"] = options.model or preset["model"]
+            env.setdefault("NOETHER_OPENAI_MAX_TOKENS", "8192")
+        if not env.get("NOETHER_OPENAI_BASE_URL"):
+            raise ValueError("NOETHER_OPENAI_BASE_URL is required for --llm openai-compatible")
+        if not env.get("NOETHER_OPENAI_MODEL") and not options.model:
+            raise ValueError("NOETHER_OPENAI_MODEL or --model is required for --llm openai-compatible")
+        if options.model:
+            env["NOETHER_OPENAI_MODEL"] = options.model
+        llm_command = f"{shlex.quote(sys.executable)} {shlex.quote(str(openai_compatible_adapter))}"
+    else:
+        llm_command = f"{shlex.quote(sys.executable)} {shlex.quote(str(demo_adapter))}"
     command = [
         sys.executable, "-m", "orchestrator.cli",
         "--provider", "command",
-        "--llm-command", f"{shlex.quote(sys.executable)} {shlex.quote(str(demo_adapter))}",
+        "--llm-command", llm_command,
         "--verifier", str(verifier),
         "--agents-file", str(agents),
         "--run-dir", run_dir,
@@ -236,6 +310,12 @@ def _run_demo(options: argparse.Namespace) -> int:
     print(json.dumps({
         "status": "demo_complete",
         "kind": options.kind,
+        "llm": options.llm,
+        "model": (
+            (options.model or env.get("OPENROUTER_MODEL") or env.get("NOETHER_OPENAI_MODEL"))
+            if options.llm in {"openrouter-free", "openai-compatible", *CLUSTER_LLM_PRESETS}
+            else "deterministic"
+        ),
         "run_dir": run_dir,
         "tasks": statuses,
         "results": str(Path(run_dir) / "results.jsonl"),

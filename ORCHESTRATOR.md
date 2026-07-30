@@ -123,6 +123,32 @@ For a richer deterministic trace over bundled physics-flavored Lean tasks:
 ./noether tui --run-dir build/runs/noether-physics-toy --once
 ```
 
+For a free-model API demo, create an OpenRouter API key and run:
+
+```bash
+./noether demo physics-toy --llm openrouter-free
+```
+
+The demo command loads `.env` from the repository root. `.env` is git-ignored;
+use `.env.example` as the committed template.
+
+For a cluster-hosted OpenAI-compatible server:
+
+```bash
+export NOETHER_OPENAI_BASE_URL="http://cluster-node:8000/v1"
+export NOETHER_OPENAI_MODEL="local-lean-coder"
+./noether demo physics-toy --llm openai-compatible
+```
+
+For the Maestro cluster presets from `bru.pdf`:
+
+```bash
+./noether demo physics-toy --llm maestro
+./noether demo physics-toy --llm piano
+./noether demo physics-toy --llm sitar
+./noether demo physics-toy --llm violin
+```
+
 Run the fast orchestration unit tests with:
 
 ```bash
