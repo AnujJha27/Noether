@@ -86,9 +86,9 @@ The orchestration layer is now implemented in the `orchestrator/` Python package
 Run an agentic proof-search workflow over JSONL tasks:
 
 ```bash
-proof-vibe agentic --provider mock --run-dir build/runs/demo < tasks.jsonl
-proof-vibe replay build/runs/demo
-proof-vibe tui --run-dir build/runs/demo --once
+noether agentic --provider mock --run-dir build/runs/demo < tasks.jsonl
+noether replay build/runs/demo
+noether tui --run-dir build/runs/demo --once
 ```
 
 Run its WSL end-to-end smoke test with:

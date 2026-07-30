@@ -39,7 +39,7 @@ def _default_lean_command() -> str:
 
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(
-        prog="proof-vibe",
+        prog="noether",
         description="Local, resumable DFT architecture certification",
     )
     root.add_argument("--policy", default=str(DEFAULT_POLICY))

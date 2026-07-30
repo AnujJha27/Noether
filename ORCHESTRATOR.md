@@ -77,7 +77,7 @@ lineage edges, and frontier state before allocating new model calls.
 For multi-task durable runs above individual theorem search:
 
 ```bash
-proof-vibe agentic --provider command \
+noether agentic --provider command \
   --llm-command "/path/to/your-model-adapter --model lean-prover" \
   --run-dir build/runs/my-model \
   < tasks.jsonl > results.jsonl
@@ -95,8 +95,8 @@ The run directory contains `state.json`, `events.jsonl`, and per-task artifacts.
 Inspect or replay it with:
 
 ```bash
-proof-vibe tui --run-dir build/runs/my-model --once
-proof-vibe replay build/runs/my-model
+noether tui --run-dir build/runs/my-model --once
+noether replay build/runs/my-model
 ```
 
 The orchestrator is a provider-neutral Python 3 layer above `build/proof-search`. It uses multiple LLM roles to generate and rank Lean patches, asks the C++ service to verify them, and feeds Lean diagnostics into later repair rounds.
