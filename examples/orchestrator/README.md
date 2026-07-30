@@ -46,7 +46,7 @@ If the endpoint requires a token:
 export NOETHER_OPENAI_API_KEY="..."
 ```
 
-For the Maestro cluster described in `bru.pdf`, shortcuts are built in:
+For the Maestro cluster, shortcuts are built in:
 
 ```bash
 # Login node, always-on model

@@ -4,11 +4,17 @@
 
 The M1 trust boundary, structured canonical manifest, English confirmation
 flow, fail-closed PT2 graph-inventory sandbox, context registry, policy-driven
-generated obligations, LLM orchestration handoff, verified-winner certificate
-assembly, and exact hash-bound example certificate are implemented. See
-[DFT_CERTIFICATION.md](DFT_CERTIFICATION.md) for commands and current
-limitations. Broader graph-to-physics analyzers and public-upload hardening
-remain future work.
+generated obligations, structured agentic proof-search orchestration,
+run-scoped memory, handoff/replay artifacts, terminal inspection,
+verified-winner certificate assembly, and exact hash-bound example certificate
+are implemented. See [DFT_CERTIFICATION.md](DFT_CERTIFICATION.md) for commands
+and current limitations.
+
+The current implementation is a local research workflow. It supports
+deterministic demos, command adapters, OpenRouter free-model demos,
+OpenAI-compatible local/cluster model endpoints, and Maestro cluster presets.
+Broader graph-to-physics analyzers and
+public-upload hardening remain future work.
 
 ## Product claim
 
@@ -45,7 +51,7 @@ explicit user review/confirmation                 │
                                ▼
              Lean declarations and proof obligations
                                │
-                   LLM proof-search orchestration
+              agentic LLM proof-search orchestration
                                ▼
               isolated project/toolchain Lean workers
                                │
@@ -192,7 +198,7 @@ multi-tenant security boundary.
 
 ## Delivery milestones
 
-### M1: Correct certificate boundary
+### M1: Correct certificate boundary — implemented
 
 - Define the example `dft-architecture-v1` policy bundle.
 - Add a real example `ArchitectureManifest`.
@@ -200,21 +206,21 @@ multi-tenant security boundary.
 - Replace “module compiled” approval in the current manifest script.
 - Add positive, rejected, and inconclusive fixtures.
 
-### M2: Canonical architecture IR
+### M2: Canonical architecture IR — implemented
 
 - Define a versioned JSON Schema.
 - Add field-level evidence provenance and content hashes.
 - Implement deterministic canonicalization.
 - Separate asserted, extracted, derived, and unresolved facts.
 
-### M3: English ingestion
+### M3: English ingestion — implemented for local confirmed descriptions
 
 - Generate a draft IR with ambiguity and missing-fact reporting.
 - Add an explicit confirmation step.
 - Preserve the original description and confirmed manifest hashes.
 - Prevent proof search before confirmation.
 
-### M4: PyTorch export ingestion
+### M4: PyTorch export ingestion — partial local implementation
 
 - Accept PT2 exports and explicit input constraints.
 - Build the isolated graph extractor.
@@ -222,14 +228,15 @@ multi-tenant security boundary.
   the first policy.
 - Reject unsupported operators or incomplete graph capture as inconclusive.
 
-### M5: Obligation generation and proof search
+### M5: Obligation generation and proof search — implemented for reviewed profiles
 
 - Generate Lean declarations from the canonical IR and policy templates.
-- Submit unresolved proofs to the existing LLM orchestration layer.
-- Track dependency-aware subgoals and all Lean diagnostics.
+- Submit unresolved proofs to the structured agentic orchestration layer.
+- Track dependency-aware subgoals, all Lean diagnostics, agent turns, handoffs,
+  model prompts/responses, verifier results, and scorecards.
 - Require the final named certificate before approval.
 
-### M6: Multi-toolchain execution
+### M6: Multi-toolchain execution — implemented locally
 
 - Add a context registry keyed by project/toolchain/policy fingerprints.
 - Prepare and cache one isolated worker pool per context.
@@ -237,7 +244,7 @@ multi-tenant security boundary.
   theorems.
 - Test simultaneous requests for different Lean versions.
 
-### M7: Public-upload hardening
+### M7: Public-upload hardening — future release gate
 
 - Move extraction and Lean jobs into disposable container/cgroup sandboxes.
 - Add upload validation, quotas, authentication, audit logs, and retention.
@@ -257,6 +264,28 @@ multi-tenant security boundary.
   certificate by cryptographic hashes.
 - Arbitrary uploads never execute in the host verifier process.
 - Worker and cache state are isolated by project/toolchain/policy fingerprint.
+
+## Local model/provider options
+
+The workflow remains provider-neutral. Current adapters include:
+
+- deterministic checked-in demo adapter;
+- arbitrary command adapters;
+- OpenRouter free-model route through `.env`;
+- generic OpenAI-compatible chat-completions endpoints;
+- Maestro cluster presets:
+  - `maestro`: always-on login-node model;
+  - `piano`, `sitar`, `violin`: compute-node Ollama servers started through
+    `srun`.
+
+Examples:
+
+```bash
+./noether demo physics-toy
+./noether demo physics-toy --llm openrouter-free
+./noether demo physics-toy --llm maestro
+./noether demo dft --project "$DFT_PROJECT" --llm maestro
+```
 
 ## Deferred work
 

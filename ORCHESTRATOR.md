@@ -140,7 +140,7 @@ export NOETHER_OPENAI_MODEL="local-lean-coder"
 ./noether demo physics-toy --llm openai-compatible
 ```
 
-For the Maestro cluster presets from `bru.pdf`:
+For the Maestro cluster presets:
 
 ```bash
 ./noether demo physics-toy --llm maestro

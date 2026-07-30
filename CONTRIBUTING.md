@@ -20,6 +20,7 @@ Then run:
 ```bash
 make test
 make wsl-smoke
+make noether-demo
 make benchmark
 ```
 
@@ -27,6 +28,9 @@ make benchmark
 
 - Add or update tests for behavioral changes.
 - Keep generated files under `build/` or another ignored directory.
+- Keep local credentials in `.env`; commit `.env.example` only.
+- Do not commit local PDFs, model outputs, or cluster notes unless they are
+  intentionally curated as project documentation.
 - Do not hardcode machine-local paths in source or documentation.
 - Document any new trust-boundary assumptions in `DFT_CERTIFICATION.md`.
 - Keep public-upload or network-facing functionality disabled unless the
@@ -35,7 +39,11 @@ make benchmark
 ## Review checklist
 
 - `make test` passes.
+- `make noether-demo` passes.
 - `make wsl-smoke` passes on a machine with Lean installed.
 - DFT certificate commands that require an external Lean project explicitly set
   `DFT_PROJECT`.
+- Cluster/local model examples use `NOETHER_OPENAI_BASE_URL`,
+  `NOETHER_OPENAI_MODEL`, or documented `--llm` presets instead of hardcoded
+  endpoints in code.
 - New policy facts have provenance and tests for incomplete evidence.

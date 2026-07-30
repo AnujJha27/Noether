@@ -36,6 +36,7 @@ make wsl-smoke
 make benchmark
 make benchmark-repeat
 make sanity-demo
+make noether-demo
 ```
 
 Expected result:
@@ -48,6 +49,16 @@ Expected result:
   run-to-run variance.
 - `make sanity-demo` writes a draft hypothesis manifest and report under
   `build/`.
+- `make noether-demo` runs the deterministic bundled agentic workflow over
+  `ProofSearch.PhysicsToy` and writes a durable run under
+  `build/runs/noether-physics-toy`.
+
+Inspect the bundled demo:
+
+```bash
+./noether replay build/runs/noether-physics-toy
+./noether tui --run-dir build/runs/noether-physics-toy --once
+```
 
 ## Terminal UI
 
@@ -62,6 +73,30 @@ For a non-interactive terminal report:
 ```bash
 python3 -m dftcert.tui --once
 ```
+
+## Model adapter demos
+
+Noether can run with:
+
+- the deterministic checked-in adapter;
+- OpenRouter's free-model route through `OPENROUTER_API_KEY`;
+- generic OpenAI-compatible local/cluster servers;
+- Maestro cluster presets: `maestro`, `piano`, `sitar`, and `violin`.
+
+Examples:
+
+```bash
+./noether demo physics-toy --llm openrouter-free
+
+export NOETHER_OPENAI_BASE_URL=http://cluster-node:8000/v1
+export NOETHER_OPENAI_MODEL=local-lean-coder
+./noether demo physics-toy --llm openai-compatible
+
+./noether demo physics-toy --llm maestro
+```
+
+Real credentials belong in `.env`, which is ignored. Commit only
+`.env.example`.
 
 ## DFT certificate example
 

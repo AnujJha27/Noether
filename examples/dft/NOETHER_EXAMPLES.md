@@ -8,7 +8,7 @@ These examples are specific to the DFT V1 policy profile in
 The canonical example manifest is:
 
 ```bash
-python3 -m dftcert.cli report \
+python3 -m dftcert.cli sanity-report \
   --manifest examples/dft/example-manifest.json \
   --proof-results examples/dft/example-proof-results.json
 ```
@@ -36,21 +36,10 @@ a live LLM. It still requires `DFT_PROJECT` to point at a compatible local
 
 ```bash
 make
+./noether demo dft --project "$DFT_PROJECT"
 
-PROOF_SEARCH_ALLOW_GENERATED_OBLIGATIONS=1 \
-PROOF_SEARCH_PROJECT_DIR="$DFT_PROJECT" \
-PROOF_SEARCH_DB=build/dft-noether-demo.db \
-./noether agentic \
-  --provider command \
-  --llm-command "python3 examples/orchestrator/noether_demo_llm.py" \
-  --verifier ./build/proof-search \
-  --agents-file examples/orchestrator/agents.research.json \
-  --run-dir build/runs/dft-noether-demo \
-  --max-rounds 1 \
-  < examples/dft/noether-obligations.jsonl
-
-./noether replay build/runs/dft-noether-demo
-./noether tui --run-dir build/runs/dft-noether-demo --once
+./noether replay build/runs/noether-dft
+./noether tui --run-dir build/runs/noether-dft --once
 ```
 
 ## Run with a real model
@@ -71,4 +60,22 @@ PROOF_SEARCH_DB=build/dft-real-model.db \
   --run-dir build/runs/dft-real-model \
   --max-rounds 3 \
   < examples/dft/noether-obligations.jsonl
+```
+
+On the Maestro cluster, use the one-command local-model presets:
+
+```bash
+./noether demo dft --project "$DFT_PROJECT" --llm maestro
+./noether demo dft --project "$DFT_PROJECT" --llm piano
+./noether demo dft --project "$DFT_PROJECT" --llm sitar
+./noether demo dft --project "$DFT_PROJECT" --llm violin
+```
+
+For the one-command bundled demos, use:
+
+```bash
+./noether demo physics-toy --llm maestro
+./noether demo physics-toy --llm piano
+./noether demo physics-toy --llm sitar
+./noether demo physics-toy --llm violin
 ```

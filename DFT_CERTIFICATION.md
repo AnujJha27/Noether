@@ -192,6 +192,32 @@ make DFT_PROJECT=/path/to/Testv2/project \
   dftcert-search-example
 ```
 
+For the checked-in deterministic DFT obligation demo:
+
+```bash
+./noether demo dft --project /path/to/Testv2/project
+./noether replay build/runs/noether-dft
+./noether tui --run-dir build/runs/noether-dft --once
+```
+
+For local or cluster-hosted OpenAI-compatible models, use the demo presets or
+the command adapter. The bundled physics-toy demo does not require Testv2:
+
+```bash
+./noether demo physics-toy --llm maestro
+
+export NOETHER_OPENAI_BASE_URL=http://cluster-node:8000/v1
+export NOETHER_OPENAI_MODEL=local-lean-coder
+./noether demo physics-toy --llm openai-compatible
+```
+
+For the DFT tasks against Testv2:
+
+```bash
+./noether demo dft --project /path/to/Testv2/project --llm maestro
+./noether demo dft --project /path/to/Testv2/project --llm openai-compatible
+```
+
 `PROOF_SEARCH_ALLOW_GENERATED_OBLIGATIONS=1` is set only on this trusted local
 pipeline. Generated mode accepts the reviewed policy preamble and generated
 statement, while ordinary verifier requests still require an authoritative

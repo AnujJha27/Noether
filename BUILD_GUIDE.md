@@ -1,24 +1,38 @@
-# Lean Proof-Search Service: Build Guide
+# Noether build guide
 
 ## What you are building
 
-A local C++ service that receives Lean proof attempts from other programs, checks them with Lean, and reports whether they compile. It handles many attempts at once, limits runaway checks, caches repeated work, and measures performance.
+Noether is a local research prototype with two layers:
+
+- a C++ Lean proof-search verifier service;
+- a Python workflow layer for policy-driven DFT certification and agentic Lean
+  proof search.
+
+The verifier receives Lean proof attempts from other programs, checks them with
+Lean, and reports whether they compile. It handles many attempts at once, limits
+runaway checks, caches repeated work, and measures performance.
 
 Another program or agent supplies the theorem, proposed Lean proof patch, and optional smaller subgoals. This service is the authoritative Lean verifier; it does not generate proofs.
 
 ## Target layout
 
 ```text
-proof-search-engine/
+noether/
   Makefile
   README.md
   ROADMAP.md
   BUILD_GUIDE.md
+  noether
+  dftcert/
+  orchestrator/
+  examples/
   lean/
     lakefile.toml
     lean-toolchain
+    ProofSearch.lean
     ProofSearch/
       Examples.lean
+      PhysicsToy.lean
   src/
     main.cpp
     protocol.cpp
@@ -35,7 +49,8 @@ proof-search-engine/
     fixtures/
     protocol_tests.cpp
     cache_tests.cpp
-    integration_tests.cpp
+      benchmark.json
+      requests.jsonl
 ```
 
 Use C++17 or newer, `g++` or `clang++`, SQLite, and a JSON library such as `nlohmann/json`.
@@ -46,6 +61,7 @@ The Makefile should provide:
 make            # build the service
 make test       # build and run tests
 make benchmark  # run the benchmark suite
+make noether-demo # run the bundled agentic workflow demo
 make clean      # remove local build output
 ```
 
@@ -88,7 +104,9 @@ Expected result: the executable `build/proof-search` exists.
 
 ## Step 2: Add the bundled Lean project
 
-Add `lean/lean-toolchain`, `lean/lakefile.toml`, and `lean/ProofSearch/Examples.lean`. Start with a simple theorem:
+Add `lean/lean-toolchain`, `lean/lakefile.toml`,
+`lean/ProofSearch/Examples.lean`, and `lean/ProofSearch/PhysicsToy.lean`.
+Start with a simple theorem:
 
 ```lean
 theorem add_zero (n : Nat) : n + 0 = n := by
@@ -99,7 +117,7 @@ Checkpoint:
 
 ```bash
 cd lean
-lake env lean ProofSearch/Examples.lean
+lake build
 ```
 
 Expected result: Lean exits successfully with no errors.

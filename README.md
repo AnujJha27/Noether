@@ -24,6 +24,8 @@ Implemented and covered by tests:
 - bounded batch verification and cancellation;
 - SQLite cache and attempt history;
 - provider-neutral LLM orchestrator with command, HTTP, and mock providers;
+- structured agent registry, tool permissions, task queues, run-scoped memory,
+  handoff receipts, replay, and terminal trace inspection;
 - English-draft and confirmation workflow for DFT manifests;
 - PT2 container validation and fail-closed sandbox controller tests;
 - policy-driven generated obligations;

@@ -1,14 +1,22 @@
-# Lean Proof-Search Service Roadmap
+# Noether roadmap
 
 ## Purpose
 
-Build a local C++ service that accepts Lean proof attempts from other programs, checks them with Lean, and returns structured verification results. The service is a reliable verifier and coordinator; it does not generate proofs itself.
+Build a local research tool that accepts scientific hypotheses, reviewed
+manifests, or model artifacts; checks them against selected policy obligations;
+and uses Lean as the authoritative proof checker. The C++ service is the proof
+verifier. The Python workflow layer owns policy intake, proof-search agents,
+durable runs, replay, and terminal inspection.
 
 ## Implementation status
 
 V1 is implemented in this repository: JSONL verification and batches, bounded Lean workers, cancellation, process limits, SQLite caching and lineage, tests, and benchmarks are available through the documented Make targets.
 
-The separate provider-neutral LLM orchestration layer is implemented. It calls this verifier and owns parallel proposer roles, critic ranking, diagnostic-driven retries, budgets, command/HTTP model integration, and full search traces. First-class dependency-aware theorem decomposition remains future work.
+The separate provider-neutral LLM orchestration layer is implemented. It calls
+this verifier and owns structured agent roles, explicit tool permissions,
+dependency-aware decomposition, parallel proposers, critic ranking,
+diagnostic-driven retries, budgets, command/HTTP/OpenAI-compatible model
+integration, durable run state, handoffs, replay, and terminal trace inspection.
 
 The next product track is architecture-level DFT certification from
 user-confirmed English descriptions or sandbox-extracted `torch.export`
@@ -18,8 +26,9 @@ milestones are in [DFT_INTEGRATION_PLAN.md](DFT_INTEGRATION_PLAN.md).
 Its first implementation slice is complete: configurable policy validation,
 canonical hash-bound manifests, English draft/confirmation, safe static PT2
 inspection, fail-closed graph extraction control, extraction-result provenance,
-policy-driven obligation generation, exact certificate checking, and
-project/toolchain/policy worker-context isolation. Broader graph analyzers and
+policy-driven obligation generation, exact certificate checking,
+project/toolchain/policy worker-context isolation, runnable demos, and
+documented local/cluster model adapters. Broader graph analyzers and
 public-upload hardening remain future work.
 
 ## V1: Local Lean verifier
@@ -80,14 +89,14 @@ Goal: reliably check externally supplied Lean proof patches on one machine.
 
 ## V2: Better proof-search coordination
 
-- Support project paths outside the bundled sample project.
+- Support richer project paths outside the bundled sample project.
 - Allow full source-file patches in addition to theorem-proof replacements.
-- Add first-class subgoal/task records with dependencies and status views.
-- Add a queue API for long-running agent workflows.
+- Expand first-class subgoal/task records with better terminal status views.
+- Harden the durable queue API for long-running agent workflows.
 - Add priority scheduling and per-agent quotas.
 - Add an HTTP adapter built on the same core as the JSON Lines interface.
-- Extend the implemented LLM-agent orchestrator with first-class dependency-aware theorem decomposition.
-- Add optional provider packages for popular local and hosted models while keeping the core provider-neutral.
+- Add more provider packages for popular local and hosted models while keeping
+  the core provider-neutral.
 
 ## DFT architecture certification
 
