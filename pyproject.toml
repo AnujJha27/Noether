@@ -19,8 +19,10 @@ classifiers = [
 ]
 
 [project.scripts]
+proof-vibe = "dftcert.local_cli:main"
 proof-vibe-dftcert = "dftcert.cli:main"
 proof-vibe-orchestrator = "orchestrator.cli:main"
+proof-vibe-replay = "orchestrator.replay:main"
 proof-vibe-tui = "dftcert.tui:main"
 
 [tool.setuptools]

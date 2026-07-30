@@ -8,9 +8,11 @@ import unittest
 
 from dftcert.tui import build_search_inspector, render_plain
 from orchestrator.agents import AgentRegistry, AgentSpec
+from orchestrator.cli import provider_routes_from_file
 from orchestrator.engine import Orchestrator, SearchConfig
 from orchestrator.models import SearchTask
 from orchestrator.permissions import PermissionPolicy
+from orchestrator.provider_router import ProviderRouter
 from orchestrator.providers import CommandProvider, MockProvider
 from orchestrator.replay import replay_search_result
 from orchestrator.run_manager import RunStore
@@ -305,6 +307,42 @@ class EngineTests(unittest.TestCase):
         )
         with self.assertRaises(RuntimeError):
             PermissionPolicy().require(strict, "candidate_submit")
+
+    def test_provider_router_uses_agent_model_route(self):
+        registry = AgentRegistry({
+            "direct": AgentSpec(
+                name="direct", kind="proposer", instructions="try",
+                model="alternate",
+                tools=("lean_diagnostics", "frontier_read", "candidate_submit"),
+                explicit_tools=True,
+            ),
+        })
+        default_provider = MockProvider([{"candidates": [{"patch": "bad"}]}])
+        routed_provider = MockProvider([{"candidates": [{"patch": "good"}]}])
+        result = Orchestrator(
+            default_provider,
+            FakeBatchVerifier(),
+            SearchConfig(max_rounds=1, agent_registry=registry),
+            provider_router=ProviderRouter(
+                default_provider,
+                {"alternate": routed_provider},
+            ),
+        ).search(self.task())
+        self.assertEqual(result["status"], "verified")
+        self.assertEqual(result["model_call_records"][0]["model"], "alternate")
+
+    def test_provider_routes_file_loads_model_routes(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "routes.json"
+            path.write_text(json.dumps({
+                "fast": {"provider": "mock"},
+            }), encoding="utf-8")
+            routes = provider_routes_from_file(path, default_timeout_s=5)
+            self.assertIn("fast", routes)
+            self.assertEqual(
+                routes["fast"].complete(agent="x", system="", prompt="", schema={})["candidates"][0]["patch"],
+                "by rfl",
+            )
 
     def test_run_store_persists_task_queue_and_artifacts(self):
         with tempfile.TemporaryDirectory() as directory:

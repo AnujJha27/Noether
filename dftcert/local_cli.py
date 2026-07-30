@@ -72,6 +72,12 @@ def parser() -> argparse.ArgumentParser:
     replay = commands.add_parser("replay")
     replay.add_argument("path")
 
+    agentic = commands.add_parser(
+        "agentic",
+        help="forward arguments to the multi-agent Lean proof-search orchestrator",
+    )
+    agentic.add_argument("orchestrator_args", nargs=argparse.REMAINDER)
+
     tui = commands.add_parser("tui")
     tui.add_argument("--model-id", default="terminal-hypothesis")
     tui.add_argument("--hypothesis")
@@ -147,7 +153,13 @@ def _summary(state: dict[str, Any], run: LocalRun) -> dict[str, Any]:
 
 def main(argv: list[str] | None = None) -> int:
     try:
-        options = parser().parse_args(argv)
+        raw_args = list(argv) if argv is not None else sys.argv[1:]
+        if "agentic" in raw_args:
+            index = raw_args.index("agentic")
+            options = parser().parse_args(raw_args[:index + 1])
+            options.orchestrator_args = raw_args[index + 1:]
+        else:
+            options = parser().parse_args(raw_args)
         policy = Policy.load(options.policy)
         if options.command == "status":
             run = LocalRun(options.run_dir)
@@ -185,6 +197,9 @@ def main(argv: list[str] | None = None) -> int:
             from orchestrator.replay import replay_path
             print(replay_path(options.path))
             return 0
+        elif options.command == "agentic":
+            from orchestrator.cli import main as orchestrator_main
+            return orchestrator_main(options.orchestrator_args)
         else:
             run = LocalRun(options.run_dir)
             config = LocalPipelineConfig(

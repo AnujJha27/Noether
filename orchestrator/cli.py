@@ -10,6 +10,7 @@ from typing import Any
 from .agents import load_agent_registry
 from .engine import DEFAULT_AGENTS_FILE, Orchestrator, SearchConfig
 from .models import SearchTask
+from .provider_router import ProviderRouter
 from .providers import CommandProvider, HttpProvider, MockProvider, token_from_environment
 from .run_manager import RunStore
 from .verifier import VerifierClient
@@ -21,6 +22,10 @@ def arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--llm-command", help="quoted adapter command for --provider command")
     parser.add_argument("--llm-url", help="gateway endpoint for --provider http")
     parser.add_argument("--provider-timeout-s", type=int, default=120)
+    parser.add_argument(
+        "--provider-routes",
+        help="JSON object mapping agent model names to provider specs",
+    )
     parser.add_argument("--verifier", default="./build/proof-search")
     parser.add_argument("--max-rounds", type=int, default=3)
     parser.add_argument("--candidates-per-agent", type=int, default=2)
@@ -49,10 +54,62 @@ def provider_from_args(options: argparse.Namespace):
     return HttpProvider(options.llm_url, token_from_environment(), options.provider_timeout_s)
 
 
+def provider_from_route_spec(spec: dict[str, Any], *, default_timeout_s: int):
+    provider = spec.get("provider")
+    timeout_s = spec.get("timeout_s", default_timeout_s)
+    if not isinstance(timeout_s, int) or isinstance(timeout_s, bool) or timeout_s <= 0:
+        raise ValueError("provider route timeout_s must be a positive integer")
+    if provider == "mock":
+        return MockProvider()
+    if provider == "command":
+        command = spec.get("command")
+        if isinstance(command, str):
+            command_value = shlex.split(command)
+        elif isinstance(command, list) and all(isinstance(item, str) for item in command):
+            command_value = command
+        else:
+            raise ValueError("command provider routes require command string or string array")
+        return CommandProvider(command_value, timeout_s)
+    if provider == "http":
+        url = spec.get("url")
+        if not isinstance(url, str) or not url:
+            raise ValueError("http provider routes require url")
+        token_env = spec.get("token_env", "LLM_API_TOKEN")
+        if token_env is not None and (not isinstance(token_env, str) or not token_env):
+            raise ValueError("token_env must be a non-empty string or null")
+        token = token_from_environment() if token_env == "LLM_API_TOKEN" else None
+        if token_env not in {None, "LLM_API_TOKEN"}:
+            import os
+            token = os.environ.get(token_env)
+        return HttpProvider(url, token, timeout_s)
+    raise ValueError("provider route provider must be one of: command, http, mock")
+
+
+def provider_routes_from_file(path: str | Path, *, default_timeout_s: int) -> dict[str, Any]:
+    value = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(value, dict):
+        raise ValueError("provider routes file must contain a JSON object")
+    routes: dict[str, Any] = {}
+    for model, spec in value.items():
+        if not isinstance(model, str) or not model:
+            raise ValueError("provider route model names must be non-empty strings")
+        if not isinstance(spec, dict):
+            raise ValueError(f"provider route {model!r} must be a JSON object")
+        routes[model] = provider_from_route_spec(spec, default_timeout_s=default_timeout_s)
+    return routes
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         options = arguments(argv)
         provider = provider_from_args(options)
+        route_providers = (
+            provider_routes_from_file(
+                options.provider_routes,
+                default_timeout_s=options.provider_timeout_s,
+            )
+            if options.provider_routes else None
+        )
         agents_file = options.agents_file or options.roles_file or str(DEFAULT_AGENTS_FILE)
         registry = load_agent_registry(agents_file)
         config = SearchConfig(
@@ -73,7 +130,12 @@ def main(argv: list[str] | None = None) -> int:
     verifier = VerifierClient([options.verifier])
     try:
         verifier.start()
-        engine = Orchestrator(provider, verifier, config)
+        engine = Orchestrator(
+            provider,
+            verifier,
+            config,
+            provider_router=ProviderRouter(provider, route_providers),
+        )
         parsed_tasks: list[SearchTask] = []
         invalid_responses: list[dict[str, Any]] = []
         for line in sys.stdin:

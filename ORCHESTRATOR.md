@@ -77,6 +77,15 @@ lineage edges, and frontier state before allocating new model calls.
 For multi-task durable runs above individual theorem search:
 
 ```bash
+proof-vibe agentic --provider command \
+  --llm-command "/path/to/your-model-adapter --model lean-prover" \
+  --run-dir build/runs/my-model \
+  < tasks.jsonl > results.jsonl
+```
+
+The same runner is also available directly:
+
+```bash
 python3 -m orchestrator.cli ... \
   --run-dir build/runs/my-model \
   < tasks.jsonl > results.jsonl
@@ -224,3 +233,28 @@ Agent names, tool permissions, strategy instructions, model routes, and handoff
 targets are data in `orchestrator/roles.json`, not branches in the engine.
 Supply another JSON object with `--agents-file` to add, remove, or replace
 agents without changing code.
+
+## Provider routing
+
+Agent `model` fields can route to different provider adapters. The default
+provider still comes from `--provider`, while `--provider-routes` supplies
+overrides by model name:
+
+```json
+{
+  "fast-local": {
+    "provider": "command",
+    "command": ["/path/to/adapter", "--model", "fast-local"],
+    "timeout_s": 60
+  },
+  "critic-hosted": {
+    "provider": "http",
+    "url": "http://127.0.0.1:8080/generate",
+    "token_env": "LLM_API_TOKEN",
+    "timeout_s": 120
+  }
+}
+```
+
+Then set an agent to `"model": "fast-local"` or `"model": "critic-hosted"`.
+Replay artifacts record the selected model route for every call.

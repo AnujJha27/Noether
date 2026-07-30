@@ -81,7 +81,15 @@ agent orchestration layer
 this C++ service ── bounded workers ── isolated Lean processes
 ```
 
-The orchestration layer is now implemented in the `orchestrator/` Python package. It owns parallel proposer roles, critic ranking, diagnostic-driven repair rounds, budgets, model-provider adapters, and search traces. `search_batch`, `parent_attempt_id`, and `subgoal_links` are its verifier integration points. See [ORCHESTRATOR.md](ORCHESTRATOR.md) for WSL setup and provider contracts.
+The orchestration layer is now implemented in the `orchestrator/` Python package. It owns structured agent roles, tool permissions, decomposition, parallel proposers, critic ranking, diagnostic-driven repair rounds, durable run state, model-provider routing, handoffs, replay, and terminal trace inspection. `search_batch`, `parent_attempt_id`, and `subgoal_links` are its verifier integration points. See [ORCHESTRATOR.md](ORCHESTRATOR.md) for WSL setup and provider contracts.
+
+Run an agentic proof-search workflow over JSONL tasks:
+
+```bash
+proof-vibe agentic --provider mock --run-dir build/runs/demo < tasks.jsonl
+proof-vibe replay build/runs/demo
+proof-vibe tui --run-dir build/runs/demo --once
+```
 
 Run its WSL end-to-end smoke test with:
 
