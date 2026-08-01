@@ -1,8 +1,9 @@
 CXX ?= g++
-CXXFLAGS := -std=c++17 -Wall -Wextra -Wpedantic -g -pthread -Iinclude
+CONDA_INCLUDE := $(if $(CONDA_PREFIX),-I$(CONDA_PREFIX)/include,)
+CXXFLAGS := -std=c++17 -Wall -Wextra -Wpedantic -g -pthread -Iinclude $(CONDA_INCLUDE)
 LDFLAGS := -pthread -lsqlite3
 ifeq ($(RELEASE),1)
-CXXFLAGS := -std=c++17 -Wall -Wextra -Wpedantic -O2 -DNDEBUG -pthread -Iinclude
+CXXFLAGS := -std=c++17 -Wall -Wextra -Wpedantic -O2 -DNDEBUG -pthread -Iinclude $(CONDA_INCLUDE)
 endif
 
 BUILD := build
@@ -15,7 +16,7 @@ SERVICE_SRC := src/main.cpp $(CORE_SRC)
 TEST_SRC := tests/test_main.cpp $(CORE_SRC)
 BENCH_SRC := src/benchmark.cpp $(CORE_SRC)
 
-.PHONY: all test benchmark benchmark-repeat clean lean orchestrator-test dftcert-test dftcert-example \
+.PHONY: all test benchmark benchmark-repeat clean lean check-cpp-deps orchestrator-test dftcert-test dftcert-example \
 	dftcert-obligations dftcert-assemble-example dftcert-certify-example \
 	dftcert-search-example sanity-demo tui wsl-smoke noether-demo
 
@@ -24,13 +25,22 @@ all: $(BUILD)/proof-search
 $(BUILD):
 	mkdir -p $(BUILD)
 
-$(BUILD)/proof-search: $(SERVICE_SRC) | $(BUILD)
+check-cpp-deps:
+	@printf '%s\n' '#include <nlohmann/json.hpp>' 'int main() { return 0; }' | \
+	  $(CXX) $(CXXFLAGS) -x c++ - -c -o /tmp/noether-json-check.o >/dev/null 2>&1 || \
+	  (echo "Missing C++ dependency: nlohmann/json.hpp"; \
+	   echo "Install it before building, for example:"; \
+	   echo "  conda install -c conda-forge nlohmann_json"; \
+	   echo "or ensure the header is available under $$CONDA_PREFIX/include or /usr/include."; \
+	   exit 1)
+
+$(BUILD)/proof-search: $(SERVICE_SRC) check-cpp-deps | $(BUILD)
 	$(CXX) $(CXXFLAGS) $(SERVICE_SRC) -o $@ $(LDFLAGS)
 
-$(BUILD)/tests: $(TEST_SRC) | $(BUILD)
+$(BUILD)/tests: $(TEST_SRC) check-cpp-deps | $(BUILD)
 	$(CXX) $(CXXFLAGS) $(TEST_SRC) -o $@ $(LDFLAGS)
 
-$(BUILD)/benchmark: $(BENCH_SRC) | $(BUILD)
+$(BUILD)/benchmark: $(BENCH_SRC) check-cpp-deps | $(BUILD)
 	$(CXX) $(CXXFLAGS) $(BENCH_SRC) -o $@ $(LDFLAGS)
 
 lean:
