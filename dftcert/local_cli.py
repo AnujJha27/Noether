@@ -13,11 +13,18 @@ from typing import Any
 from .analysis import analyze_inventory
 from .extraction import apply_extraction_result
 from .manifest import ArchitectureManifest
+from .model_assessment import (
+    assessment_payload,
+    confirm_assumptions_interactively,
+    draft_with_llm,
+    read_description,
+)
 from .pipeline import (
     LocalPipeline, LocalPipelineConfig, LocalRun, PipelineError, command_tuple,
 )
 from .policy import Policy
 from .pt2 import pending_manifest
+from .report import sanity_report
 from .sandbox import BubblewrapExtractor
 
 
@@ -168,6 +175,25 @@ def parser() -> argparse.ArgumentParser:
         help="model slug for --llm openrouter-free",
     )
 
+    assess = commands.add_parser("assess", help="assess a model description against a physics policy")
+    assess.add_argument("kind", choices=("dft",))
+    assess.add_argument("--description", required=True, help="description text or path to a markdown/text file")
+    assess.add_argument("--run-dir", required=True)
+    assess.add_argument("--model-id", default="described-model")
+    assess.add_argument(
+        "--llm",
+        choices=("deterministic", "openai-compatible", "maestro", "piano", "sitar", "violin"),
+        default="deterministic",
+        help="assumption extractor backend",
+    )
+    assess.add_argument("--model", default=None, help="model slug for --llm openai-compatible")
+    assess.add_argument("--provider-timeout-s", type=int, default=180)
+    assess.add_argument(
+        "--non-interactive",
+        action="store_true",
+        help="write the draft assessment without asking for assumption confirmation",
+    )
+
     tui = commands.add_parser("tui")
     tui.add_argument("--model-id", default="terminal-hypothesis")
     tui.add_argument("--hypothesis")
@@ -178,6 +204,7 @@ def parser() -> argparse.ArgumentParser:
     tui.add_argument("--run-dir")
     tui.add_argument("--coverage", action="store_true")
     tui.add_argument("--once", action="store_true")
+    tui.add_argument("--width", type=int, default=100)
     return root
 
 
@@ -365,6 +392,64 @@ def _run_demo(options: argparse.Namespace) -> int:
     return 0
 
 
+def _run_assess(options: argparse.Namespace, policy: Policy) -> int:
+    _load_env_file(ROOT / ".env")
+    description = read_description(options.description)
+    run_dir = Path(options.run_dir)
+    if options.llm == "deterministic":
+        from .hypothesis import draft_hypothesis
+
+        manifest = draft_hypothesis(
+            model_id=options.model_id,
+            hypothesis=description,
+            policy=policy,
+        )
+    else:
+        preset = CLUSTER_LLM_PRESETS.get(options.llm)
+        base_url = preset["base_url"] if preset else os.environ.get("NOETHER_OPENAI_BASE_URL")
+        model = options.model or (preset["model"] if preset else os.environ.get("NOETHER_OPENAI_MODEL"))
+        if not base_url:
+            raise ValueError("NOETHER_OPENAI_BASE_URL is required for LLM assumption extraction")
+        if not model:
+            raise ValueError("NOETHER_OPENAI_MODEL or --model is required for LLM assumption extraction")
+        manifest = draft_with_llm(
+            model_id=options.model_id,
+            description=description,
+            policy=policy,
+            base_url=base_url,
+            model=model,
+            timeout_s=options.provider_timeout_s,
+        )
+    if not options.non_interactive and sys.stdin.isatty():
+        confirm_assumptions_interactively(manifest, policy)
+    report = sanity_report(manifest=manifest, policy=policy)
+    assessment = assessment_payload(manifest=manifest, policy=policy)
+    run_dir.mkdir(parents=True, exist_ok=True)
+    manifest.write(run_dir / "manifest.json")
+    (run_dir / "report.json").write_text(
+        json.dumps(report, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    (run_dir / "assessment.json").write_text(
+        json.dumps(assessment, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    print(json.dumps({
+        "status": "assessment_complete",
+        "kind": options.kind,
+        "verdict": assessment["verdict"],
+        "summary": assessment["summary"],
+        "run_dir": str(run_dir),
+        "inspect": f"./noether tui --run-dir {run_dir} --once",
+        "artifacts": {
+            "assessment": str(run_dir / "assessment.json"),
+            "manifest": str(run_dir / "manifest.json"),
+            "report": str(run_dir / "report.json"),
+        },
+    }, sort_keys=True))
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     try:
         raw_args = list(argv) if argv is not None else sys.argv[1:]
@@ -406,6 +491,7 @@ def main(argv: list[str] | None = None) -> int:
                 args.append("--coverage")
             if options.once:
                 args.append("--once")
+            args.extend(["--width", str(options.width)])
             return tui_main(args)
         elif options.command == "replay":
             from orchestrator.replay import replay_path
@@ -416,6 +502,8 @@ def main(argv: list[str] | None = None) -> int:
             return orchestrator_main(options.orchestrator_args)
         elif options.command == "demo":
             return _run_demo(options)
+        elif options.command == "assess":
+            return _run_assess(options, policy)
         else:
             run = LocalRun(options.run_dir)
             config = LocalPipelineConfig(

@@ -17,6 +17,7 @@ from dftcert.english import interpret_english
 from dftcert.extraction import apply_extraction_result
 from dftcert.hypothesis import draft_hypothesis, policy_coverage
 from dftcert.manifest import ArchitectureManifest, ManifestError
+from dftcert.model_assessment import assessment_payload
 from dftcert.obligations import generate_obligations
 from dftcert.policy import Policy, PolicyError
 from dftcert.pt2 import inspect_pt2, pending_manifest
@@ -24,7 +25,7 @@ from dftcert.report import sanity_report
 from dftcert.sandbox import BubblewrapExtractor, SandboxUnavailable
 from dftcert.security import AuditLog, sign_attestation, verify_attestation
 from dftcert.pipeline import LocalPipeline, LocalPipelineConfig, LocalRun
-from dftcert.tui import build_artifact_report, build_hypothesis_report, render_plain
+from dftcert.tui import build_artifact_report, build_hypothesis_report, build_run_inspector, render_plain
 from extractors.torch_export_worker import inventory_node
 from orchestrator.providers import MockProvider
 
@@ -231,6 +232,38 @@ class HypothesisIntakeTests(unittest.TestCase):
         rendered = render_plain(data, width=88)
         self.assertIn("PROOF SEARCH ARTIFACTS", rendered)
         self.assertIn("consistent with policy", rendered.lower())
+
+    def test_assessment_payload_is_structured_without_raw_logs(self):
+        manifest = draft_hypothesis(
+            model_id="plain-english",
+            hypothesis="The model is nonlocal and uses a self-adjoint learned operator.",
+            policy=self.policy,
+        )
+        payload = assessment_payload(manifest=manifest, policy=self.policy)
+        self.assertEqual(payload["verdict"], "inconclusive")
+        self.assertIn("assumptions", payload)
+        self.assertIn("checks", payload)
+        rendered = render_plain(
+            {"inspector_kind": "assessment", "assessment": payload},
+            width=88,
+        )
+        self.assertIn("VERDICT", rendered)
+        self.assertIn("ASSUMPTIONS", rendered)
+        self.assertIn("VERDICT EVIDENCE", rendered)
+        self.assertNotIn("events.jsonl", rendered)
+
+    def test_run_dir_prefers_assessment_artifact(self):
+        manifest = draft_hypothesis(
+            model_id="assessment-run",
+            hypothesis="The model has an XC derivative discontinuity and nonlocal coupling.",
+            policy=self.policy,
+        )
+        payload = assessment_payload(manifest=manifest, policy=self.policy)
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory)
+            (path / "assessment.json").write_text(json.dumps(payload), encoding="utf-8")
+            data = build_run_inspector(path)
+        self.assertEqual(data["inspector_kind"], "assessment")
 
 
 class Pt2Tests(unittest.TestCase):

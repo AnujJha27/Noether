@@ -120,11 +120,14 @@ def build_artifact_report(
 def status_color(status: str) -> str:
     if status in {"consistent_with_policy", "approved", "verified"}:
         return "good"
-    if status in {"violates_required_principle", "certificate_check_failed", "refuted"}:
+    if status in {"violates_required_principle", "certificate_check_failed", "refuted", "rejected", "not_sound"}:
         return "bad"
     if status in {"formalization_gap"}:
         return "gap"
-    if status in {"proof_required", "inconclusive_missing_assumption", "project_not_built"}:
+    if status in {
+        "proof_required", "inconclusive_missing_assumption", "project_not_built",
+        "needs_user_confirmation", "needs_clarification", "unknown", "inconclusive",
+    }:
         return "warn"
     return "muted"
 
@@ -404,6 +407,68 @@ def search_result_lines(data: dict[str, Any], width: int) -> list[tuple[str, str
     return lines
 
 
+def assessment_lines(data: dict[str, Any], width: int) -> list[tuple[str, str]]:
+    lines: list[tuple[str, str]] = []
+    verdict = str(data.get("verdict", "inconclusive"))
+    color = {
+        "physically_sound": "good",
+        "not_sound": "bad",
+        "inconclusive": "warn",
+    }.get(verdict, "muted")
+    lines.append((f"VERDICT  {label(verdict).upper()}", color))
+    for line in wrap_lines(str(data.get("summary", "")), width):
+        lines.append((line, "muted"))
+    lines.append(("", "muted"))
+    lines.append(("ASSUMPTIONS", "title"))
+    assumptions = data.get("assumptions", [])
+    if isinstance(assumptions, list) and assumptions:
+        for item in assumptions:
+            if not isinstance(item, dict):
+                continue
+            status = str(item.get("status", "unknown"))
+            lines.append((f"■ {item.get('id', 'assumption')}  [{label(status)}]", status_color(status)))
+            evidence = str(item.get("evidence", "")).strip()
+            if evidence:
+                for line in wrap_lines(f"evidence: {evidence}", width - 2, indent="  "):
+                    lines.append((line, "muted"))
+            value = item.get("value")
+            if value is not None:
+                for line in wrap_lines(f"value: {_short_json(value, width - 9)}", width - 2, indent="  "):
+                    lines.append((line, "muted"))
+            question = str(item.get("question") or "").strip()
+            if question:
+                for line in wrap_lines(f"clarify: {question}", width - 2, indent="  "):
+                    lines.append((line, "warn"))
+    else:
+        lines.append(("No assumptions extracted yet.", "muted"))
+    lines.append(("", "muted"))
+    lines.append(("VERDICT EVIDENCE", "title"))
+    checks = data.get("checks", [])
+    if isinstance(checks, list) and checks:
+        for item in checks:
+            if not isinstance(item, dict):
+                continue
+            status = str(item.get("status", "unknown"))
+            lines.append((f"◆ {item.get('id', 'check')}  [{label(status)}]", status_color(status)))
+            for line in wrap_lines(str(item.get("reason", "")), width - 2, indent="  "):
+                lines.append((line, "muted"))
+    else:
+        lines.append(("No formal checks have been mapped yet.", "muted"))
+    lines.append(("", "muted"))
+    lines.append(("NEXT ACTION", "title"))
+    for action in data.get("next_actions", []) or ["Open proof details when you need to audit the decision."]:
+        for line in wrap_lines(f"■ {action}", width):
+            lines.append((line, "warn"))
+    lines.append(("", "muted"))
+    lines.append(("SYSTEM DIAGNOSTICS", "title"))
+    lines.append((f"assessment: {data.get('assessment_sha256', 'draft')}", "muted"))
+    artifacts = data.get("artifacts", {})
+    if isinstance(artifacts, dict):
+        for name, path in artifacts.items():
+            lines.append((f"{name}: {path}", "muted"))
+    return lines
+
+
 def run_inspector_lines(data: dict[str, Any], width: int) -> list[tuple[str, str]]:
     state = data.get("state", {})
     artifacts = [item for item in data.get("artifacts", []) if isinstance(item, dict)]
@@ -476,7 +541,9 @@ def coverage_lines(data: dict[str, Any], width: int) -> list[tuple[str, str]]:
 
 def render_plain(data: dict[str, Any], *, coverage: bool = False,
                  width: int = 100) -> str:
-    if data.get("inspector_kind") == "search_result":
+    if data.get("inspector_kind") == "assessment":
+        source = assessment_lines(data["assessment"], width)
+    elif data.get("inspector_kind") == "search_result":
         source = search_result_lines(data["result"], width)
     elif data.get("inspector_kind") == "run":
         source = run_inspector_lines(data, width)
@@ -925,6 +992,7 @@ class TuiApp:
         title = (
             "coverage" if self.mode == "coverage"
             else "artifact report" if self.mode == "artifact"
+            else "model assessment" if self.data.get("inspector_kind") == "assessment"
             else "agentic run inspector" if self.mode == "inspector"
             else "draft sanity report"
         )
@@ -934,15 +1002,15 @@ class TuiApp:
         if self.mode == "coverage":
             source = coverage_lines(self.data, right_w - 4)
         elif self.mode == "inspector":
-            if self.data.get("inspector_kind") == "run":
+            if self.data.get("inspector_kind") == "assessment":
+                source = assessment_lines(self.data["assessment"], right_w - 4)
+            elif self.data.get("inspector_kind") == "run":
                 artifacts = self.data.get("artifacts", [])
                 if isinstance(artifacts, list):
                     self.data["selected_artifact_index"] = self._selected_artifact_index(len(artifacts))
-            source = (
-                search_result_lines(self.data["result"], right_w - 4)
-                if self.data.get("inspector_kind") == "search_result"
-                else run_inspector_lines(self.data, right_w - 4)
-            )
+                source = run_inspector_lines(self.data, right_w - 4)
+            else:
+                source = search_result_lines(self.data["result"], right_w - 4)
         else:
             source = report_lines(self.data, right_w - 4)
         visible = source[self.scroll:self.scroll + height - 7]
@@ -1080,6 +1148,12 @@ def build_search_inspector(path: str | Path) -> dict[str, Any]:
 
 def build_run_inspector(path: str | Path) -> dict[str, Any]:
     root = Path(path)
+    assessment = root / "assessment.json"
+    if assessment.exists():
+        return {
+            "inspector_kind": "assessment",
+            "assessment": load_json_object(assessment),
+        }
     state = load_json_object(root / "state.json")
     artifacts: list[dict[str, Any]] = []
     artifact_root = root / "artifacts"
