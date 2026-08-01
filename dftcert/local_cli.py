@@ -66,11 +66,14 @@ def _lake_executable() -> str:
     return lake
 
 
-def _ensure_lean_project_built(project: Path) -> None:
+def _ensure_lean_project_built(project: Path, target: str | None = None) -> None:
     lake = _lake_executable()
+    command = [lake, "build"]
+    if target:
+        command.append(target)
     try:
         process = subprocess.run(
-            [lake, "build"],
+            command,
             cwd=project,
             text=True,
             capture_output=True,
@@ -83,7 +86,8 @@ def _ensure_lean_project_built(project: Path) -> None:
         ) from error
     if process.returncode != 0:
         detail = process.stderr.strip() or process.stdout.strip()
-        raise ValueError(f"Lean project build failed before proof search: {detail}")
+        rendered = " ".join(command)
+        raise ValueError(f"Lean project build failed before proof search (`{rendered}`): {detail}")
 
 
 def parser() -> argparse.ArgumentParser:
@@ -269,7 +273,7 @@ def _run_demo(options: argparse.Namespace) -> int:
         tasks = ROOT / "examples/dft/noether-obligations.jsonl"
         project = options.project or os.environ.get("DFT_PROJECT") or str(ROOT / "examples/dft/lean")
         run_dir = options.run_dir or str(ROOT / "build/runs/noether-dft")
-        _ensure_lean_project_built(Path(project))
+        _ensure_lean_project_built(Path(project), "Testv2.Verifier")
         env = os.environ.copy()
         env.update({
             "PROOF_SEARCH_ALLOW_GENERATED_OBLIGATIONS": "1",
