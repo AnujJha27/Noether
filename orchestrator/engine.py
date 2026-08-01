@@ -5,7 +5,7 @@ import threading
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any
+from typing import Any, Callable
 
 from .agents import AgentRegistry, AgentSpec, load_agent_registry
 from .decomposer import decompose_task
@@ -108,7 +108,8 @@ class Orchestrator:
     def __init__(self, provider: LlmProvider, verifier: VerifierClient,
                  config: SearchConfig | None = None,
                  provider_router: ProviderRouter | None = None,
-                 permissions: PermissionPolicy | None = None):
+                 permissions: PermissionPolicy | None = None,
+                 progress_sink: Callable[[dict[str, Any]], None] | None = None):
         self.provider = provider
         self.verifier = verifier
         self.config = config or SearchConfig()
@@ -144,6 +145,15 @@ class Orchestrator:
         self._budget_lock = threading.Lock()
         self._model_calls = 0
         self._model_call_records: list[dict[str, Any]] = []
+        self.progress_sink = progress_sink
+
+    def _progress(self, event: dict[str, Any]) -> None:
+        if self.progress_sink is None:
+            return
+        try:
+            self.progress_sink(event)
+        except Exception:
+            pass
 
     def _complete_agent(self, agent: AgentSpec, **request: Any) -> dict[str, Any]:
         with self._budget_lock:
@@ -161,14 +171,38 @@ class Orchestrator:
             "schema": request.get("schema", {}),
             "status": "started",
         }
+        self._progress({
+            "type": "model_call_started",
+            "call_index": call_index,
+            "agent": agent.name,
+            "kind": agent.kind,
+            "model": agent.model,
+            "system": request.get("system", ""),
+            "prompt": request.get("prompt", ""),
+        })
         try:
             response = self.router.complete(agent, **request)
             record["status"] = "completed"
             record["response"] = response
+            self._progress({
+                "type": "model_call_completed",
+                "call_index": call_index,
+                "agent": agent.name,
+                "kind": agent.kind,
+                "model": agent.model,
+            })
             return response
         except ProviderError as error:
             record["status"] = "provider_error"
             record["error"] = str(error)
+            self._progress({
+                "type": "model_call_failed",
+                "call_index": call_index,
+                "agent": agent.name,
+                "kind": agent.kind,
+                "model": agent.model,
+                "message": str(error),
+            })
             raise
         finally:
             with self._budget_lock:
@@ -464,6 +498,7 @@ class Orchestrator:
 
     def search(self, task: SearchTask,
                resume: dict[str, Any] | None = None) -> dict[str, Any]:
+        self._progress({"type": "search_started", "task_id": task.id})
         self._model_calls = 0
         self._model_call_records = []
         attempts: list[Attempt] = []
@@ -530,6 +565,14 @@ class Orchestrator:
         for round_number in range(first_round, first_round + self.config.max_rounds):
             if winner is not None:
                 break
+            self._progress({
+                "type": "round_started",
+                "task_id": task.id,
+                "round": round_number,
+                "frontier_width": len(frontier),
+                "model_calls": self._model_calls,
+                "unique_candidates": len(seen),
+            })
             decision = self.supervisor.decide(
                 round_number=round_number,
                 model_calls=self._model_calls,
@@ -542,6 +585,11 @@ class Orchestrator:
             )
             supervisor_decisions.append(decision)
             events.append({"type": "supervisor_decision", **decision.to_json()})
+            self._progress({
+                "type": "supervisor_decision",
+                "task_id": task.id,
+                **decision.to_json(),
+            })
             if decision.action == "stop":
                 final_status = (
                     "model_budget_exhausted"
@@ -563,6 +611,12 @@ class Orchestrator:
                 task, round_number, attempts, seen, events, frontier, assignments,
                 turns, handoff_receipts, memory
             )
+            self._progress({
+                "type": "candidates_collected",
+                "task_id": task.id,
+                "round": round_number,
+                "candidate_count": len(candidates),
+            })
             candidates = self._rank(task, candidates, round_number, events, turns)
             if not candidates:
                 if self._model_calls >= self.config.max_model_calls:
@@ -584,6 +638,13 @@ class Orchestrator:
                     "limits": task.limits,
                     "parent_attempt_id": task.parent_attempt_id,
                 }
+                self._progress({
+                    "type": "verification_started",
+                    "task_id": task.id,
+                    "round": round_number,
+                    "candidate_count": len(candidates),
+                    "max_parallel": self.config.max_parallel_verifications,
+                })
                 if task.verification_mode == "generated_obligation":
                     response = self.verifier.verify_generated_batch(
                         **verifier_request, preamble=task.preamble
@@ -595,6 +656,12 @@ class Orchestrator:
             except VerifierError as error:
                 events.append({"type": "verifier_error", "round": round_number,
                                "message": str(error)})
+                self._progress({
+                    "type": "verifier_error",
+                    "task_id": task.id,
+                    "round": round_number,
+                    "message": str(error),
+                })
                 final_status = "verifier_error"
                 break
             candidate_by_id = {candidate.id: candidate for candidate in candidates}
@@ -629,6 +696,14 @@ class Orchestrator:
             events.append({"type": "verification_round", "round": round_number,
                            "status": response.get("status", "unknown"),
                            "attempt_count": len(candidates)})
+            self._progress({
+                "type": "verification_completed",
+                "task_id": task.id,
+                "round": round_number,
+                "status": response.get("status", "unknown"),
+                "attempt_count": len(candidates),
+                "winner_id": response.get("winner_id"),
+            })
             frontier = self.frontier_policy.select(graph_nodes)
             events.append({
                 "type": "frontier_update", "round": round_number,
@@ -646,6 +721,14 @@ class Orchestrator:
                 break
         scorecard = agent_scorecard(turns, attempts)
         memory.update_from_scorecard(scorecard)
+        self._progress({
+            "type": "search_completed",
+            "task_id": task.id,
+            "status": final_status,
+            "model_calls": self._model_calls,
+            "unique_candidates": len(seen),
+            "attempt_count": len(attempts),
+        })
         output: dict[str, Any] = {
             "version": 1, "id": task.id, "status": final_status,
             "task": task.to_json(),

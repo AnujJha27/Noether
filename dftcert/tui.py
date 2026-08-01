@@ -73,6 +73,23 @@ def load_json_list(path: str | Path) -> list[dict[str, Any]]:
     return value
 
 
+def load_jsonl_objects(path: str | Path, *, limit: int | None = None) -> list[dict[str, Any]]:
+    source = Path(path)
+    if not source.exists():
+        return []
+    items: list[dict[str, Any]] = []
+    for line in source.read_text(encoding="utf-8").splitlines():
+        if not line.strip():
+            continue
+        try:
+            value = json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        if isinstance(value, dict):
+            items.append(value)
+    return items[-limit:] if limit is not None else items
+
+
 def build_artifact_report(
     *,
     policy: Policy,
@@ -209,6 +226,54 @@ def _short_json(value: Any, width: int) -> str:
     return text if len(text) <= width else text[:max(0, width - 3)] + "..."
 
 
+def event_summary(event: dict[str, Any], width: int) -> tuple[str, str]:
+    kind = str(event.get("type", "event"))
+    when = str(event.get("time", ""))[11:19] if event.get("time") else "--:--:--"
+    task = event.get("task_id") or event.get("task") or ""
+    prefix = f"{when} {kind}"
+    if task:
+        prefix += f" {task}"
+    color = "muted"
+    detail = ""
+    if kind == "model_call_started":
+        color = "gap"
+        detail = f"call={event.get('call_index')} agent={event.get('agent')} model={event.get('model')}"
+    elif kind == "model_call_completed":
+        color = "good"
+        detail = f"call={event.get('call_index')} agent={event.get('agent')}"
+    elif kind == "model_call_failed":
+        color = "bad"
+        detail = f"call={event.get('call_index')} agent={event.get('agent')} {event.get('message')}"
+    elif kind == "round_started":
+        color = "title"
+        detail = (
+            f"round={event.get('round')} frontier={event.get('frontier_width')} "
+            f"model_calls={event.get('model_calls')} candidates={event.get('unique_candidates')}"
+        )
+    elif kind == "supervisor_decision":
+        color = "warn" if event.get("action") == "stop" else "muted"
+        detail = f"round={event.get('round')} action={event.get('action')} reason={event.get('reason')}"
+    elif kind == "candidates_collected":
+        detail = f"round={event.get('round')} count={event.get('candidate_count')}"
+    elif kind == "verification_started":
+        color = "gap"
+        detail = f"round={event.get('round')} count={event.get('candidate_count')}"
+    elif kind == "verification_completed":
+        color = status_color(str(event.get("status")))
+        detail = (
+            f"round={event.get('round')} status={event.get('status')} "
+            f"attempts={event.get('attempt_count')} winner={event.get('winner_id')}"
+        )
+    elif kind in {"task_started", "task_completed", "search_completed"}:
+        color = status_color(str(event.get("status", "running")))
+        detail = f"status={event.get('status', 'running')}"
+    elif event.get("message"):
+        color = "bad"
+        detail = str(event.get("message"))
+    text = f"{prefix}  {detail}".rstrip()
+    return (text if len(text) <= width else text[:max(0, width - 3)] + "...", color)
+
+
 def search_result_lines(data: dict[str, Any], width: int) -> list[tuple[str, str]]:
     lines: list[tuple[str, str]] = []
     status = str(data.get("status", "unknown"))
@@ -332,6 +397,13 @@ def run_inspector_lines(data: dict[str, Any], width: int) -> list[tuple[str, str
             for item in state.get("completed", []):
                 if isinstance(item, dict):
                     lines.append((f"✓ {item.get('task_id')} [{label(item.get('status'))}]", "good"))
+    events = data.get("events", [])
+    if isinstance(events, list) and events:
+        lines.append(("", "muted"))
+        lines.append(("RECENT ACTIVITY", "title"))
+        for event in events[-18:]:
+            if isinstance(event, dict):
+                lines.append(event_summary(event, width))
     for artifact in data.get("artifacts", []):
         if isinstance(artifact, dict):
             lines.append(("", "muted"))
@@ -373,7 +445,8 @@ def render_plain(data: dict[str, Any], *, coverage: bool = False,
 
 class TuiApp:
     def __init__(self, *, policy: Policy, model_id: str, hypothesis: str,
-                 mode: str = "report", data: dict[str, Any] | None = None):
+                 mode: str = "report", data: dict[str, Any] | None = None,
+                 refresh_path: str | Path | None = None):
         self.policy = policy
         self.model_id = model_id
         self.hypothesis = hypothesis
@@ -381,6 +454,7 @@ class TuiApp:
         self.example_index = 0
         self.mode = mode
         self.scroll = 0
+        self.refresh_path = Path(refresh_path) if refresh_path is not None else None
         self.message = "F5 run · F2 coverage · F3 example · Ctrl-U clear · Ctrl-Q quit"
         self.data: dict[str, Any] = data or build_hypothesis_report(
             policy=policy, model_id=model_id, hypothesis=hypothesis
@@ -395,10 +469,15 @@ class TuiApp:
         except curses.error:
             pass
         screen.keypad(True)
+        screen.timeout(1000 if self.refresh_path is not None else -1)
         self._colors()
         while True:
+            self._refresh_if_needed()
             self._draw(screen)
-            key = screen.get_wch()
+            try:
+                key = screen.get_wch()
+            except curses.error:
+                continue
             if key in ("\x11",):  # Ctrl-Q
                 return
             if key == "\x15":  # Ctrl-U
@@ -437,6 +516,15 @@ class TuiApp:
                 continue
             if isinstance(key, str) and key.isprintable():
                 self.hypothesis += key
+
+    def _refresh_if_needed(self) -> None:
+        if self.refresh_path is None:
+            return
+        try:
+            self.data = build_run_inspector(self.refresh_path)
+            self.message = "live run inspector · Ctrl-Q quit · arrows scroll"
+        except Exception as error:
+            self.message = f"{type(error).__name__}: {error}"
 
     def _colors(self) -> None:
         if not curses.has_colors():
@@ -500,6 +588,51 @@ class TuiApp:
         for row, line in enumerate(lines[:height]):
             screen.addstr(y + row, x, line[:width], attr)
 
+    def _run_prompt_text(self) -> str:
+        events = self.data.get("events", [])
+        if isinstance(events, list):
+            for event in reversed(events):
+                if not isinstance(event, dict):
+                    continue
+                if event.get("type") == "model_call_started" and event.get("prompt"):
+                    header = (
+                        f"agent: {event.get('agent', 'unknown')}\n"
+                        f"model: {event.get('model', 'default')}\n"
+                        f"call: {event.get('call_index', '?')}\n\n"
+                    )
+                    system = str(event.get("system", "")).strip()
+                    prompt = str(event.get("prompt", "")).strip()
+                    if system:
+                        return header + "SYSTEM\n" + system + "\n\nPROMPT\n" + prompt
+                    return header + prompt
+        state = self.data.get("state", {})
+        if isinstance(state, dict):
+            for item in state.get("tasks", []):
+                if not isinstance(item, dict) or item.get("status") != "running":
+                    continue
+                task = item.get("task", {})
+                if isinstance(task, dict):
+                    return (
+                        f"task: {item.get('task_id', 'unknown')}\n"
+                        f"target: {task.get('target') or '(generated obligation)'}\n\n"
+                        f"THEOREM\n{task.get('theorem', '')}\n\n"
+                        f"CONTEXT\n{task.get('context') or '(none supplied)'}"
+                    )
+        return "Waiting for the next model prompt."
+
+    def _left_pane(self) -> tuple[str, str, str]:
+        if self.mode == "inspector" and self.data.get("inspector_kind") == "run":
+            return (
+                "active prompt",
+                self._run_prompt_text(),
+                "live prompt view · Ctrl-Q quit",
+            )
+        return (
+            "hypothesis",
+            self.hypothesis,
+            "type to edit · F5 run · F3 examples",
+        )
+
     def _draw(self, screen: Any) -> None:
         screen.erase()
         height, width = screen.getmaxyx()
@@ -512,13 +645,13 @@ class TuiApp:
         screen.addstr(0, 2, "† PROOF VIBE", self._attr("title") | curses.A_BOLD)
         screen.addstr(0, 18, self.message[:width - 20], self._attr("muted"))
 
-        self._box(screen, 2, 1, height - 3, left_w, "hypothesis")
+        left_title, left_text, left_footer = self._left_pane()
+        self._box(screen, 2, 1, height - 3, left_w, left_title)
         self._draw_wrapped(
-            screen, 4, 3, left_w - 4, height - 10, self.hypothesis,
+            screen, 4, 3, left_w - 4, height - 10, left_text,
             self._attr("muted"),
         )
-        footer = "type to edit · F5 run · F3 examples"
-        screen.addstr(height - 5, 3, footer[:left_w - 4], self._attr("title"))
+        screen.addstr(height - 5, 3, left_footer[:left_w - 4], self._attr("title"))
         screen.addstr(height - 4, 3, f"id: {self.model_id}"[:left_w - 4], self._attr("muted"))
 
         title = (
@@ -607,7 +740,8 @@ def build_run_inspector(path: str | Path) -> dict[str, Any]:
     if artifact_root.exists():
         for artifact in sorted(artifact_root.glob("*.json")):
             artifacts.append(load_json_object(artifact))
-    return {"inspector_kind": "run", "state": state, "artifacts": artifacts}
+    events = load_jsonl_objects(root / "events.jsonl", limit=200)
+    return {"inspector_kind": "run", "state": state, "artifacts": artifacts, "events": events}
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -656,6 +790,7 @@ def main(argv: list[str] | None = None) -> int:
         hypothesis=options.hypothesis,
         mode=mode,
         data=data,
+        refresh_path=options.run_dir if options.run_dir and not options.once else None,
     ).run()
     return 0
 

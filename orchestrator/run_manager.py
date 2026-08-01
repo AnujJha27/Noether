@@ -1,8 +1,10 @@
 from __future__ import annotations
 
 import json
+import threading
 import uuid
 from dataclasses import dataclass, field
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -77,6 +79,7 @@ class RunStore:
         self.state_path = self.directory / "state.json"
         self.events_path = self.directory / "events.jsonl"
         self.artifacts_dir = self.directory / "artifacts"
+        self._event_lock = threading.Lock()
 
     def create(self, tasks: list[SearchTask]) -> RunState:
         if self.state_path.exists():
@@ -94,8 +97,11 @@ class RunStore:
 
     def append_event(self, event: dict[str, Any]) -> None:
         self.directory.mkdir(parents=True, exist_ok=True)
-        with self.events_path.open("a", encoding="utf-8") as file:
-            file.write(json.dumps(event, sort_keys=True) + "\n")
+        enriched = dict(event)
+        enriched.setdefault("time", datetime.now(timezone.utc).isoformat())
+        with self._event_lock:
+            with self.events_path.open("a", encoding="utf-8") as file:
+                file.write(json.dumps(enriched, sort_keys=True) + "\n")
 
     def record_task_started(self, state: RunState, task_id: str) -> None:
         state.status = "running"

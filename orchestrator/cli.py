@@ -129,13 +129,6 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     verifier = VerifierClient([options.verifier])
     try:
-        verifier.start()
-        engine = Orchestrator(
-            provider,
-            verifier,
-            config,
-            provider_router=ProviderRouter(provider, route_providers),
-        )
         parsed_tasks: list[SearchTask] = []
         invalid_responses: list[dict[str, Any]] = []
         for line in sys.stdin:
@@ -152,6 +145,14 @@ def main(argv: list[str] | None = None) -> int:
             print(json.dumps(response, separators=(",", ":")), flush=True)
         run_store = RunStore(options.run_dir) if options.run_dir else None
         run_state = run_store.create(parsed_tasks) if run_store else None
+        verifier.start()
+        engine = Orchestrator(
+            provider,
+            verifier,
+            config,
+            provider_router=ProviderRouter(provider, route_providers),
+            progress_sink=run_store.append_event if run_store else None,
+        )
         for task in parsed_tasks:
             resume = None
             if options.resume_journal and options.journal_dir:
