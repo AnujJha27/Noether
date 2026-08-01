@@ -79,7 +79,7 @@ class RunMemory:
                     note += f" -> {diagnostics[:180]}"
                 _append_unique(self.known_failed_tactics, note)
                 continue
-            if attempt.status in {"timeout", "memory_limit", "worker_failure"}:
+            if attempt.status in {"timeout", "memory_limit", "worker_failure", "project_not_built"}:
                 _append_unique(
                     self.theorem_notes,
                     f"{attempt.candidate.id} ended with {attempt.status}",

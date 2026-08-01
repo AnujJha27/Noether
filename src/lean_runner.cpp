@@ -7,6 +7,7 @@
 #include <fcntl.h>
 #include <fstream>
 #include <pwd.h>
+#include <sstream>
 #include <sys/resource.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -56,6 +57,16 @@ void drain_pipe(int fd, std::string& output) {
   }
 }
 
+std::filesystem::path module_artifact(const std::filesystem::path& project_dir,
+                                      const std::string& module) {
+  std::filesystem::path relative;
+  std::string part;
+  std::stringstream stream(module);
+  while (std::getline(stream, part, '.')) relative /= part;
+  relative += ".olean";
+  return project_dir / ".lake/build/lib/lean" / relative;
+}
+
 }  // namespace
 
 LeanRunner::LeanRunner(std::filesystem::path project_dir)
@@ -66,6 +77,16 @@ VerificationResult LeanRunner::verify(const VerifyRequest& request,
   using Clock = std::chrono::steady_clock;
   const auto started = Clock::now();
   VerificationResult result;
+  const auto artifact = module_artifact(project_dir_, request.module);
+  if (!std::filesystem::exists(artifact)) {
+    result.status = "project_not_built";
+    result.diagnostics =
+        "Lean project is not built or the requested module is missing.\n"
+        "Expected compiled module: " + artifact.string() + "\n"
+        "Run this before proof search:\n"
+        "  cd " + project_dir_.string() + " && " + lake_executable() + " build";
+    return result;
+  }
 
   std::error_code error;
   const auto root = std::filesystem::temp_directory_path() / "proof-search-engine";

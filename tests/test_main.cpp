@@ -107,6 +107,23 @@ void cache_tests() {
 }
 
 void lean_tests() {
+  const auto missing_project = std::filesystem::temp_directory_path() / "proof-search-missing-lean-build";
+  std::filesystem::remove_all(missing_project);
+  std::filesystem::create_directories(missing_project);
+  {
+    LeanRunner missing_runner(missing_project);
+    VerifyRequest missing;
+    missing.id = "lean-not-built"; missing.project = "sample";
+    missing.module = "ProofSearch.Examples";
+    missing.declaration = "theorem arbitrary_name (n : Nat) : n + 0 = n";
+    missing.target = "ProofSearch.Examples.add_zero";
+    missing.patch = "by rfl";
+    const auto missing_result = missing_runner.verify(missing);
+    expect(missing_result.status == "project_not_built",
+           "missing Lean build was not reported clearly");
+  }
+  std::filesystem::remove_all(missing_project);
+
   LeanRunner runner("lean");
   VerifyRequest valid;
   valid.id = "lean-valid"; valid.project = "sample";

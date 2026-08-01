@@ -208,6 +208,7 @@ def agent_scorecard(turns: list[AgentTurn], attempts: list[Attempt]) -> dict[str
         "verified": 0,
         "lean_error": 0,
         "timeout_or_worker_failure": 0,
+        "infrastructure_errors": 0,
         "provider_errors": 0,
     })
     for turn in turns:
@@ -224,7 +225,12 @@ def agent_scorecard(turns: list[AgentTurn], attempts: list[Attempt]) -> dict[str
             stats["lean_error"] += 1
         elif attempt.status in {"timeout", "memory_limit", "worker_failure"}:
             stats["timeout_or_worker_failure"] += 1
+        elif attempt.status == "project_not_built":
+            stats["infrastructure_errors"] += 1
     for stats in by_agent.values():
-        checked = stats["verified"] + stats["lean_error"] + stats["timeout_or_worker_failure"]
+        checked = (
+            stats["verified"] + stats["lean_error"] +
+            stats["timeout_or_worker_failure"]
+        )
         stats["success_rate"] = stats["verified"] / checked if checked else 0.0
     return dict(sorted(by_agent.items()))

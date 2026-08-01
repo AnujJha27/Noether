@@ -58,6 +58,34 @@ def _default_lean_command() -> str:
     return f"{lake} env lean -j 1"
 
 
+def _lake_executable() -> str:
+    lake = shutil.which("lake")
+    if lake is None:
+        candidate = Path.home() / ".elan/bin/lake"
+        lake = str(candidate) if candidate.exists() else "lake"
+    return lake
+
+
+def _ensure_lean_project_built(project: Path) -> None:
+    lake = _lake_executable()
+    try:
+        process = subprocess.run(
+            [lake, "build"],
+            cwd=project,
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+    except OSError as error:
+        raise ValueError(
+            f"Lean build tool not found or not executable: {lake}. "
+            "Install Lean/Lake or set PATH/PROOF_SEARCH_LAKE before proof search."
+        ) from error
+    if process.returncode != 0:
+        detail = process.stderr.strip() or process.stdout.strip()
+        raise ValueError(f"Lean project build failed before proof search: {detail}")
+
+
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(
         prog="noether",
@@ -109,6 +137,12 @@ def parser() -> argparse.ArgumentParser:
     demo.add_argument("--run-dir")
     demo.add_argument("--project", help="required for dft unless DFT_PROJECT is set")
     demo.add_argument("--max-rounds", type=int, default=1)
+    demo.add_argument(
+        "--provider-timeout-s",
+        type=int,
+        default=300,
+        help="seconds to wait for each live model adapter call",
+    )
     demo.add_argument("--verifier", default=str(ROOT / "build/proof-search"))
     demo.add_argument(
         "--llm",
@@ -230,6 +264,7 @@ def _run_demo(options: argparse.Namespace) -> int:
         tasks = ROOT / "examples/orchestrator/physics-toy-tasks.jsonl"
         run_dir = options.run_dir or str(ROOT / "build/runs/noether-physics-toy")
         env = os.environ.copy()
+        _ensure_lean_project_built(ROOT / "lean")
     else:
         tasks = ROOT / "examples/dft/noether-obligations.jsonl"
         project = options.project or os.environ.get("DFT_PROJECT")
@@ -253,6 +288,7 @@ def _run_demo(options: argparse.Namespace) -> int:
             env["NOETHER_OPENAI_BASE_URL"] = preset["base_url"]
             env["NOETHER_OPENAI_MODEL"] = options.model or preset["model"]
             env.setdefault("NOETHER_OPENAI_MAX_TOKENS", "8192")
+            env.setdefault("NOETHER_OPENAI_TIMEOUT_S", str(options.provider_timeout_s))
         if not env.get("NOETHER_OPENAI_BASE_URL"):
             raise ValueError("NOETHER_OPENAI_BASE_URL is required for --llm openai-compatible")
         if not env.get("NOETHER_OPENAI_MODEL") and not options.model:
@@ -270,6 +306,7 @@ def _run_demo(options: argparse.Namespace) -> int:
         "--agents-file", str(agents),
         "--run-dir", run_dir,
         "--max-rounds", str(options.max_rounds),
+        "--provider-timeout-s", str(options.provider_timeout_s),
         "--agent-parallelism", "1",
     ]
     input_text = tasks.read_text(encoding="utf-8")

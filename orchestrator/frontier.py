@@ -17,7 +17,7 @@ class FrontierPolicy:
         goals = diagnostics.count("⊢")
         errors = diagnostics.lower().count("error:")
         timeout_penalty = (
-            500 if status in {"timeout", "memory_limit", "worker_failure"} else 0
+            500 if status in {"timeout", "memory_limit", "worker_failure", "project_not_built"} else 0
         )
         return (
             1000.0
@@ -84,4 +84,3 @@ def restore_search(value: dict[str, Any], policy: FrontierPolicy) -> RestoredSea
     if not frontier:
         frontier = policy.select(nodes)
     return RestoredSearch(attempts, nodes, frontier, seen, winner)
-

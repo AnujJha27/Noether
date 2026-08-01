@@ -379,6 +379,105 @@ class EngineTests(unittest.TestCase):
             self.assertIn("SEARCH", rendered)
             self.assertIn("LEAN DIAGNOSTICS", rendered)
 
+    def test_terminal_inspector_labels_handoffs_as_routing(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "search.json"
+            path.write_text(json.dumps({
+                "version": 1, "id": "search", "status": "exhausted",
+                "model_calls": 1, "unique_candidates": 1, "rounds_used": 1,
+                "task": self.task().to_json(),
+                "supervisor_decisions": [],
+                "agent_turns": [{
+                    "agent": "direct",
+                    "round": 1,
+                    "action": "propose_proof_patch",
+                    "status": "completed",
+                    "output_summary": "accepted 1 candidate(s)",
+                }],
+                "handoffs": [{
+                    "id": "handoff-r1-1",
+                    "round": 1,
+                    "from_agent": "direct",
+                    "to_agent": "structural",
+                    "node_id": "search-r1-direct-1",
+                    "reason": "share candidate",
+                    "state_summary": "candidate available",
+                    "accepted": False,
+                }],
+                "handoff_receipts": [],
+                "attempts": [],
+            }), encoding="utf-8")
+            rendered = render_plain(build_search_inspector(path), width=88)
+            self.assertIn("ROUTING HANDOFFS", rendered)
+            self.assertIn("[offered]", rendered)
+            self.assertIn("proposed 1 candidate(s)", rendered)
+            self.assertNotIn("accepted=False", rendered)
+
+    def test_run_inspector_shows_selected_past_task(self):
+        data = {
+            "inspector_kind": "run",
+            "state": {
+                "run_id": "run",
+                "status": "running",
+                "tasks": [],
+                "completed": [],
+                "blocked": [],
+            },
+            "events": [],
+            "selected_artifact_index": 0,
+            "artifacts": [
+                {
+                    "version": 1,
+                    "id": "first-task",
+                    "status": "verified",
+                    "model_calls": 1,
+                    "unique_candidates": 1,
+                    "rounds_used": 1,
+                    "task": self.task().to_json(),
+                    "supervisor_decisions": [],
+                    "agent_turns": [],
+                    "attempts": [],
+                },
+                {
+                    "version": 1,
+                    "id": "second-task",
+                    "status": "exhausted",
+                    "model_calls": 1,
+                    "unique_candidates": 0,
+                    "rounds_used": 1,
+                    "task": self.task().to_json(),
+                    "supervisor_decisions": [],
+                    "agent_turns": [],
+                    "attempts": [],
+                },
+            ],
+        }
+        rendered = render_plain(data, width=88)
+        self.assertIn("PAST TASK  1/2", rendered)
+        self.assertIn("SEARCH  first-task", rendered)
+        self.assertNotIn("SEARCH  second-task", rendered)
+
+    def test_terminal_inspector_marks_missing_lean_build_as_infrastructure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory) / "search.json"
+            path.write_text(json.dumps({
+                "version": 1, "id": "search", "status": "exhausted",
+                "model_calls": 1, "unique_candidates": 1, "rounds_used": 1,
+                "task": self.task().to_json(),
+                "supervisor_decisions": [],
+                "agent_turns": [],
+                "attempts": [{
+                    "id": "search-r1-direct-1",
+                    "agent": "direct",
+                    "round": 1,
+                    "status": "project_not_built",
+                    "diagnostics": "Lean project is not built",
+                }],
+            }), encoding="utf-8")
+            rendered = render_plain(build_search_inspector(path), width=88)
+            self.assertIn("infrastructure issue", rendered)
+            self.assertIn("Lean project is not built", rendered)
+
 
 if __name__ == "__main__":
     unittest.main()
