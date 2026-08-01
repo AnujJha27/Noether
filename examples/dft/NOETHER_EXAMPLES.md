@@ -31,15 +31,33 @@ orchestrator.
 ## Run the deterministic demo adapter
 
 This demonstrates the orchestration trace and verifier boundary without needing
-a live LLM. It still requires `DFT_PROJECT` to point at a compatible local
-`Testv2` Lean project.
+a live LLM. By default it uses the vendored `Testv2` snapshot in
+`examples/dft/lean`.
 
 ```bash
 make
-./noether demo dft --project "$DFT_PROJECT"
+cd examples/dft/lean
+lake update mathlib
+lake exe cache get
+lake build Testv2.Verifier
+cd ../../..
+./noether demo dft
 
 ./noether replay build/runs/noether-dft
 ./noether tui --run-dir build/runs/noether-dft --once
+```
+
+To test against an external `Testv2` checkout instead, pass `--project` or set
+`DFT_PROJECT`.
+
+If this is the first time using the vendored snapshot on a machine, resolve the
+Lean 4.31 Mathlib manifest before fetching caches:
+
+```bash
+cd examples/dft/lean
+lake update mathlib
+lake exe cache get
+lake build Testv2.Verifier
 ```
 
 ## Run with a real model
@@ -49,7 +67,7 @@ adapter and optional model routing:
 
 ```bash
 PROOF_SEARCH_ALLOW_GENERATED_OBLIGATIONS=1 \
-PROOF_SEARCH_PROJECT_DIR="$DFT_PROJECT" \
+PROOF_SEARCH_PROJECT_DIR=examples/dft/lean \
 PROOF_SEARCH_DB=build/dft-real-model.db \
 ./noether agentic \
   --provider command \
@@ -65,10 +83,10 @@ PROOF_SEARCH_DB=build/dft-real-model.db \
 On the Maestro cluster, use the one-command local-model presets:
 
 ```bash
-./noether demo dft --project "$DFT_PROJECT" --llm maestro
-./noether demo dft --project "$DFT_PROJECT" --llm piano
-./noether demo dft --project "$DFT_PROJECT" --llm sitar
-./noether demo dft --project "$DFT_PROJECT" --llm violin
+./noether demo dft --llm maestro
+./noether demo dft --llm piano
+./noether demo dft --llm sitar
+./noether demo dft --llm violin
 ```
 
 For the one-command bundled demos, use:

@@ -183,11 +183,11 @@ Generate the example task bundle:
 make dftcert-obligations
 ```
 
-Run all generated tasks through a configured LLM adapter and the Testv2
-worker in ordinary WSL:
+Run all generated tasks through a configured LLM adapter and the vendored
+Testv2 worker in ordinary WSL:
 
 ```bash
-make DFT_PROJECT=/path/to/Testv2/project \
+make DFT_PROJECT=examples/dft/lean \
   LLM_COMMAND="/path/to/your/json-llm-adapter" \
   dftcert-search-example
 ```
@@ -195,7 +195,12 @@ make DFT_PROJECT=/path/to/Testv2/project \
 For the checked-in deterministic DFT obligation demo:
 
 ```bash
-./noether demo dft --project /path/to/Testv2/project
+cd examples/dft/lean
+lake update mathlib
+lake exe cache get
+lake build Testv2.Verifier
+cd ../../..
+./noether demo dft
 ./noether replay build/runs/noether-dft
 ./noether tui --run-dir build/runs/noether-dft --once
 ```
@@ -211,11 +216,23 @@ export NOETHER_OPENAI_MODEL=local-lean-coder
 ./noether demo physics-toy --llm openai-compatible
 ```
 
-For the DFT tasks against Testv2:
+For the DFT tasks against the vendored Testv2 snapshot:
 
 ```bash
-./noether demo dft --project /path/to/Testv2/project --llm maestro
-./noether demo dft --project /path/to/Testv2/project --llm openai-compatible
+./noether demo dft --llm maestro
+./noether demo dft --llm openai-compatible
+```
+
+To test a separate Testv2 checkout under review, pass
+`--project /path/to/Testv2/project` explicitly.
+
+On a fresh machine, initialize the vendored Lean 4.31 snapshot first:
+
+```bash
+cd examples/dft/lean
+lake update mathlib
+lake exe cache get
+lake build Testv2.Verifier
 ```
 
 `PROOF_SEARCH_ALLOW_GENERATED_OBLIGATIONS=1` is set only on this trusted local

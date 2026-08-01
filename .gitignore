@@ -1,6 +1,8 @@
 /build/
 /lean/.lake/
 /lean/lake-manifest.json
+/examples/dft/lean/.lake/
+/examples/dft/lean/lake-manifest.json
 /proof_search.db
 /benchmark-results.json
 /benchmark-repeat-results.json

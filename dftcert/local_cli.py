@@ -267,10 +267,9 @@ def _run_demo(options: argparse.Namespace) -> int:
         _ensure_lean_project_built(ROOT / "lean")
     else:
         tasks = ROOT / "examples/dft/noether-obligations.jsonl"
-        project = options.project or os.environ.get("DFT_PROJECT")
-        if not project:
-            raise ValueError("DFT demo requires --project or DFT_PROJECT")
+        project = options.project or os.environ.get("DFT_PROJECT") or str(ROOT / "examples/dft/lean")
         run_dir = options.run_dir or str(ROOT / "build/runs/noether-dft")
+        _ensure_lean_project_built(Path(project))
         env = os.environ.copy()
         env.update({
             "PROOF_SEARCH_ALLOW_GENERATED_OBLIGATIONS": "1",
