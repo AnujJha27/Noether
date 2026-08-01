@@ -43,12 +43,12 @@ theorem differentiableAt_forces_zero_xcDiscontinuity
     symm
     have h :=
       (uniqueDiffOn_Iic N).eq (by simp : N ∈ Set.Iic N) hDiff.hasDerivWithinAt hLeft
-    exact congrArg (fun D : ℝ →L[ℝ] ℝ => D 1) h
+    simpa using congrArg (fun D : ℝ →L[ℝ] ℝ => D 1) h
   have hRightEq : rightSlope = d := by
     symm
     have h :=
       (uniqueDiffOn_Ici N).eq (by simp : N ∈ Set.Ici N) hDiff.hasDerivWithinAt hRight
-    exact congrArg (fun D : ℝ →L[ℝ] ℝ => D 1) h
+    simpa using congrArg (fun D : ℝ →L[ℝ] ℝ => D 1) h
   simp [xcDiscontinuity, hLeftEq, hRightEq]
 
 /-- No certificate with a nonzero derivative discontinuity can be built for a
