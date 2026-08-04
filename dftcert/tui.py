@@ -1123,6 +1123,15 @@ class TuiApp:
                 self._run_prompt_text(),
                 "Tab focus · mouse/arrows scroll · q/Esc quit",
             )
+        if self.mode == "inspector" and self.data.get("inspector_kind") == "assessment":
+            manifest = self.data.get("manifest", {})
+            source = manifest.get("source", {}) if isinstance(manifest, dict) else {}
+            description = source.get("description", "") if isinstance(source, dict) else ""
+            return (
+                "architecture description",
+                str(description) or "description unavailable",
+                "LLM assessment is review-only · q/Esc quit",
+            )
         return (
             "hypothesis",
             self.hypothesis,
@@ -1327,9 +1336,11 @@ def build_run_inspector(path: str | Path) -> dict[str, Any]:
     root = Path(path)
     assessment = root / "assessment.json"
     if assessment.exists():
+        manifest = root / "manifest.json"
         return {
             "inspector_kind": "assessment",
             "assessment": load_json_object(assessment),
+            "manifest": load_json_object(manifest) if manifest.exists() else {},
         }
     state = load_json_object(root / "state.json")
     artifacts: list[dict[str, Any]] = []

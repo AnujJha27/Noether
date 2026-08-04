@@ -316,8 +316,12 @@ class HypothesisIntakeTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             path = pathlib.Path(directory)
             (path / "assessment.json").write_text(json.dumps(payload), encoding="utf-8")
+            (path / "manifest.json").write_text(
+                json.dumps(manifest.value), encoding="utf-8"
+            )
             data = build_run_inspector(path)
         self.assertEqual(data["inspector_kind"], "assessment")
+        self.assertEqual(data["manifest"]["source"]["description"], manifest.value["source"]["description"])
 
 
 class Pt2Tests(unittest.TestCase):
