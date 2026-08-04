@@ -5,6 +5,7 @@ cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
 
 : "${NOETHER_OPENAI_BASE_URL:=http://127.0.0.1:11434/v1/chat/completions}"
 : "${NOETHER_OPENAI_MODEL:=qwen3.6-64k:latest}"
+: "${NOETHER_ASSESS_TIMEOUT_S:=600}"
 export NOETHER_OPENAI_BASE_URL NOETHER_OPENAI_MODEL
 
 test -x ./build/proof-search || { echo 'run make first' >&2; exit 1; }
@@ -13,6 +14,7 @@ test -x ./build/proof-search || { echo 'run make first' >&2; exit 1; }
   --description examples/dft/gnn-ring6-3hop-description.txt \
   --model-id ring6-gnn \
   --llm maestro \
+  --provider-timeout-s "$NOETHER_ASSESS_TIMEOUT_S" \
   --run-dir build/runs/ring6-assess
 
 echo 'Assessment complete. Review the live TUI; press q to continue to Lean certification.'
