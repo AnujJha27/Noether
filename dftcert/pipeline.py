@@ -205,6 +205,9 @@ class LocalPipeline:
                 engine = Orchestrator(
                     provider, verifier,
                     SearchConfig(max_rounds=self.config.max_rounds_per_run),
+                    progress_sink=lambda event: self.run.event(
+                        str(event.get("type", "progress")), event
+                    ),
                 )
                 result = engine.search(
                     SearchTask.from_json(task_value), resume=previous

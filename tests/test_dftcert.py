@@ -614,6 +614,10 @@ class LocalPipelineSecurityTests(unittest.TestCase):
             self.assertEqual(len(completed["proof_results"]), 3)
             self.assertTrue((run.directory / "Certificate.lean").exists())
             self.assertTrue((run.directory / "report.json").exists())
+            inspector = build_run_inspector(run.directory)
+            self.assertTrue(any(
+                event["type"] == "model_call_started" for event in inspector["events"]
+            ))
             self.assertEqual(pipeline.resume()["status"], "approved")
 
 

@@ -1383,7 +1383,15 @@ def build_run_inspector(path: str | Path) -> dict[str, Any]:
     if artifact_root.exists():
         for artifact in sorted(artifact_root.glob("*.json")):
             artifacts.append(load_json_object(artifact))
-    events = load_jsonl_objects(root / "events.jsonl", limit=200)
+    events = []
+    for entry in load_jsonl_objects(root / "events.jsonl", limit=200):
+        if not isinstance(entry, dict):
+            continue
+        fields = entry.get("fields", {})
+        normalized = dict(fields) if isinstance(fields, dict) else {}
+        normalized["type"] = entry.get("event", "event")
+        normalized["time"] = entry.get("timestamp", "")
+        events.append(normalized)
     return {"inspector_kind": "run", "state": state, "artifacts": artifacts, "events": events}
 
 
