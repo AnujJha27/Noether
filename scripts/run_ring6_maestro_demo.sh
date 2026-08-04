@@ -18,11 +18,15 @@ test -x ./build/proof-search || { echo 'run make first' >&2; exit 1; }
 echo 'Assessment complete. Review the live TUI; press q to continue to Lean certification.'
 ./noether tui --run-dir build/runs/ring6-assess
 
-./noether certify \
-  --run-dir build/runs/ring6-certify \
-  --description examples/dft/gnn-ring6-3hop-description.txt \
-  --model-id ring6-gnn \
-  --facts examples/dft/gnn-ring6-3hop-facts.json \
-  --architecture-ir examples/dft/gnn-ring6-3hop-architecture-ir.json \
-  --project examples/dft/lean \
-  --llm-command "python3 examples/orchestrator/openai_compatible_adapter.py"
+if test -f build/runs/ring6-certify/state.json; then
+  ./noether resume build/runs/ring6-certify
+else
+  ./noether certify \
+    --run-dir build/runs/ring6-certify \
+    --description examples/dft/gnn-ring6-3hop-description.txt \
+    --model-id ring6-gnn \
+    --facts examples/dft/gnn-ring6-3hop-facts.json \
+    --architecture-ir examples/dft/gnn-ring6-3hop-architecture-ir.json \
+    --project examples/dft/lean \
+    --llm-command "python3 examples/orchestrator/openai_compatible_adapter.py"
+fi

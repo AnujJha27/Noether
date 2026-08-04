@@ -25,7 +25,7 @@ from dftcert.report import sanity_report
 from dftcert.sandbox import BubblewrapExtractor, SandboxUnavailable
 from dftcert.security import AuditLog, sign_attestation, verify_attestation
 from dftcert.pipeline import LocalPipeline, LocalPipelineConfig, LocalRun
-from dftcert.tui import build_artifact_report, build_hypothesis_report, build_run_inspector, render_plain
+from dftcert.tui import assessment_lines, build_artifact_report, build_hypothesis_report, build_run_inspector, render_plain
 from extractors.torch_export_worker import inventory_node
 from orchestrator.providers import MockProvider
 
@@ -303,8 +303,13 @@ class HypothesisIntakeTests(unittest.TestCase):
             "review": "This supports the claim, but requires Lean verification.",
             "formal_status": "not_lean_verified",
         }]
+        manifest.refresh_hash()
         row = next(item for item in assumption_rows(manifest, self.policy) if item["id"] == "self_adjoint")
         self.assertEqual(row["proof_review"]["formal_status"], "not_lean_verified")
+        rendered = "\n".join(text for text, _ in assessment_lines(
+            assessment_payload(manifest=manifest, policy=self.policy), 88
+        ))
+        self.assertIn("rationale review", rendered)
 
     def test_run_dir_prefers_assessment_artifact(self):
         manifest = draft_hypothesis(

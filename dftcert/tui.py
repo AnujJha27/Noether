@@ -443,6 +443,14 @@ def assessment_lines(data: dict[str, Any], width: int) -> list[tuple[str, str]]:
             if question:
                 for line in wrap_lines(f"clarify: {question}", width - 2, indent="  "):
                     lines.append((line, "warn"))
+            review = item.get("proof_review")
+            if isinstance(review, dict):
+                assessment = str(review.get("assessment", "insufficient"))
+                lines.append((f"  rationale review: {label(assessment)} (not Lean-verified)", "warn"))
+                rationale = str(review.get("review", "")).strip()
+                if rationale:
+                    for line in wrap_lines(rationale, width - 4, indent="    "):
+                        lines.append((line, "muted"))
     else:
         lines.append(("No assumptions extracted yet.", "muted"))
     lines.append(("", "muted"))
