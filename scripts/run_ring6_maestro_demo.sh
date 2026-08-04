@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.."
+
 : "${NOETHER_OPENAI_BASE_URL:=http://127.0.0.1:11434/v1/chat/completions}"
 : "${NOETHER_OPENAI_MODEL:=qwen3.6-64k:latest}"
 export NOETHER_OPENAI_BASE_URL NOETHER_OPENAI_MODEL
