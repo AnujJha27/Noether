@@ -49,7 +49,7 @@ theorem correction_isNonLocal (selfE : SelfEnergy X) (μ : XCPotential X) :
   obtain ⟨g, hg⟩ := μ.isLocal
   refine ⟨fun x => f x + g x, fun φ x => ?_⟩
   have h_split : selfE.op φ = correction X selfE μ φ + μ.op φ := by
-    simp [correction, ContinuousLinearMap.sub_apply]
+    simp [correction]
   have h_split_eval : (selfE.op φ) x = (correction X selfE μ φ) x + (μ.op φ) x := by
     rw [h_split]; rfl
   rw [h_split_eval, hf, hg]; ring
@@ -117,7 +117,7 @@ def eigenGap (selfE : SelfEnergy X) (μ : XCPotential X) (φ : H X) : ℝ :=
 theorem ks_neq_quasiparticle (selfE : SelfEnergy X) (μ : XCPotential X) :
     ∃ φ : H X, eigenGap X selfE μ φ ≠ 0 := by
   by_contra h_all_zero
-  push_neg at h_all_zero
+  push Not at h_all_zero
   have hC_sa : IsSelfAdjoint (correction X selfE μ) :=
     correction_isSelfAdjoint X selfE μ
   have h_C_zero : correction X selfE μ = 0 :=
@@ -140,7 +140,7 @@ theorem correction_nonuniform_on_sphere (selfE : SelfEnergy X) (μ : XCPotential
   have hC_sa := correction_isSelfAdjoint X selfE μ
   have hC_nl := correction_isNonLocal X selfE μ
   by_contra h
-  push_neg at h
+  push Not at h
   -- h : ∀ φ ψ, ‖φ‖ = 1 → ‖ψ‖ = 1 → eigenGap φ = eigenGap ψ
   -- Get a witness φ₀ with eigenGap(φ₀) ≠ 0 and normalize it to u₀.
   obtain ⟨φ₀, hφ₀⟩ := ks_neq_quasiparticle X selfE μ
@@ -179,8 +179,7 @@ theorem correction_nonuniform_on_sphere (selfE : SelfEnergy X) (μ : XCPotential
     intro v
     have hq : @inner ℝ _ _ v (correction X selfE μ v) = ‖v‖ ^ 2 * c := by
       have := h_quad v; simp only [eigenGap, correction] at this; exact this
-    simp only [ContinuousLinearMap.sub_apply, ContinuousLinearMap.smul_apply,
-               ContinuousLinearMap.id_apply, inner_sub_right,
+    simp only [sub_apply, smul_apply, ContinuousLinearMap.id_apply, inner_sub_right,
                real_inner_smul_right, real_inner_self_eq_norm_sq, hq]
     ring
   -- C − c·id is self-adjoint
@@ -191,8 +190,7 @@ theorem correction_nonuniform_on_sphere (selfE : SelfEnergy X) (μ : XCPotential
            c • ContinuousLinearMap.id ℝ (H X) := by
       apply ContinuousLinearMap.ext; intro ψ
       apply ext_inner_left ℝ; intro φ
-      simp [ContinuousLinearMap.smul_apply,
-            ContinuousLinearMap.id_apply, real_inner_smul_right]
+      simp [smul_apply, ContinuousLinearMap.id_apply, real_inner_smul_right]
     exact this
   -- By core lemma: C − c·id = 0, so C = c·id
   have hD_zero := inner_self_zero_of_selfAdj_implies_zero X hD_sa h_zero
@@ -203,7 +201,7 @@ theorem correction_nonuniform_on_sphere (selfE : SelfEnergy X) (μ : XCPotential
   refine ⟨fun _ => c, fun φ x => ?_⟩
   have hCφ : correction X selfE μ φ = c • φ := by
     have := DFunLike.congr_fun hC_eq φ
-    simp [ContinuousLinearMap.smul_apply, ContinuousLinearMap.id_apply] at this
+    simp [smul_apply, ContinuousLinearMap.id_apply] at this
     exact this
   simp [hCφ, smul_eq_mul]
 
@@ -288,7 +286,7 @@ theorem correction_has_eigenvector (selfE : SelfEnergy X) (μ : XCPotential X) :
   have hn : Module.finrank ℝ (H X) = n := rfl
 
   by_contra h_all
-  push_neg at h_all
+  push Not at h_all
 
   have h_all_zero : ∀ i : Fin n, h_symm.eigenvalues hn i = 0 := by
     intro i

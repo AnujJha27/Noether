@@ -101,10 +101,10 @@ def sanity_report(
         overall = "consistent_with_policy"
     elif any(item["category"] == "violates_required_principle" for item in items):
         overall = "violates_required_principle"
-    elif any(item["category"] == "formalization_gap" for item in items):
-        overall = "formalization_gap"
     elif any(item["category"] == "inconclusive_missing_assumption" for item in items):
         overall = "inconclusive_missing_assumption"
+    elif any(item["category"] == "formalization_gap" for item in items):
+        overall = "formalization_gap"
     elif items and all(item["category"] == "consistent_with_policy" for item in items):
         overall = "consistent_with_policy"
     else:

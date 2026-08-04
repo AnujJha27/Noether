@@ -1,0 +1,5 @@
+{
+  "xc_discontinuity_compatible": {"satisfied": true, "mechanism": "piecewise_hinge", "electron_boundaries": [0]},
+  "spatial_nonlocality_compatible": {"satisfied": true, "receptive_field": 3, "required_couplings": [{"source": 0, "target": 3}], "uncovered_couplings": []},
+  "self_adjoint": {"satisfied": true, "enforcement": "symmetric_residual"}
+}

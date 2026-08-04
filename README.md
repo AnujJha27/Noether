@@ -36,8 +36,8 @@ Known limits:
 
 - public/multi-tenant uploads are out of scope until the container/cgroup
   sandboxing requirements in `DFT_INTEGRATION_PLAN.md` are implemented;
-- the DFT example certificate depends on an external Lean/Testv2 project
-  supplied through `DFT_PROJECT`;
+- the DFT example uses the vendored `examples/dft/lean` Testv2 snapshot by
+  default; `DFT_PROJECT` can select a separate reviewed checkout;
 - the default benchmark is a smoke benchmark, not a full paper-scale evaluation.
 
 ## Build and run
@@ -99,6 +99,16 @@ Run the bundled one-command demo:
 make noether-demo
 # or directly:
 ./noether demo physics-toy
+```
+
+For a DFT presentation, cycle through a Lean-verified canonical case, an
+explicit policy violation, missing assumptions, and a formalization gap:
+
+```bash
+./noether demo dft --scenario certified --llm maestro
+./noether demo dft --scenario non-self-adjoint
+./noether demo dft --scenario missing-assumptions
+./noether demo dft --scenario formalization-gap
 ```
 
 Run the demo through a free-model API route:

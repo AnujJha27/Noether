@@ -1,0 +1,6 @@
+{
+  "ir_schema_version": 1,
+  "xc": {"representation": "piecewise_hinge", "boundary": 0, "left_slope": 0, "right_slope": 1},
+  "spatial": {"adjacency": "ring6", "receptive_field": 3, "required_couplings": [{"source": 0, "target": 3}]},
+  "operator": {"construction": "symmetric_residual", "sites": 6}
+}

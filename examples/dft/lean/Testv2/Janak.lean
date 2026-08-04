@@ -34,7 +34,8 @@ theorem janak_fderiv (ε : H X) (f₀ : H X) :
 /-- The j-th partial derivative ∂E/∂fⱼ = εⱼ. -/
 lemma janak_partial [DecidableEq X] (ε : H X) (j : X) :
     innerSL ℝ ε (EuclideanSpace.single j (1 : ℝ)) = ε j := by
-  simp [innerSL_apply, EuclideanSpace.inner_single_right]
+  change @inner ℝ _ _ ε (EuclideanSpace.single j (1 : ℝ)) = ε j
+  simp [EuclideanSpace.inner_single_right]
 
 /-- Directional Janak theorem: changing only the `j`-th occupation has slope
     equal to the `j`-th KS eigenvalue. -/
@@ -44,13 +45,34 @@ theorem janak_coordinate_deriv [DecidableEq X] (ε f₀ : H X) (j : X) :
         @inner ℝ _ _ ε (f₀ + t • EuclideanSpace.single j (1 : ℝ)))
       (ε j) 0 := by
   let e_j : H X := EuclideanSpace.single j (1 : ℝ)
-  have hline : HasDerivAt (fun t : ℝ => f₀ + t • e_j) e_j 0 := by
-    simpa [e_j] using ((hasDerivAt_id (0 : ℝ)).smul_const e_j).const_add f₀
-  have hcomp :
+  have hcoord : @inner ℝ _ _ ε e_j = ε j := by
+    simpa [e_j] using janak_partial X ε j
+  have hscalar :
       HasDerivAt
-        ((fun f : H X => @inner ℝ _ _ ε f) ∘ fun t : ℝ => f₀ + t • e_j)
-        (innerSL ℝ ε e_j) 0 :=
-    (janak_fderiv X ε f₀).comp_hasDerivAt_of_eq hline (by simp)
-  simpa [Function.comp_def, e_j, janak_partial X ε j] using hcomp
+        (fun t : ℝ => @inner ℝ _ _ ε f₀ + t * @inner ℝ _ _ ε e_j)
+        (@inner ℝ _ _ ε e_j) 0 := by
+    have hlinear :
+        HasDerivAt
+          (fun t : ℝ => t * @inner ℝ _ _ ε e_j)
+          (@inner ℝ _ _ ε e_j) 0 := by
+      simpa [one_mul] using
+        ((hasDerivAt_id (0 : ℝ)).mul_const (@inner ℝ _ _ ε e_j))
+    simpa [add_comm, add_left_comm, add_assoc] using
+      hlinear.const_add (@inner ℝ _ _ ε f₀)
+  have htarget :
+      (fun t : ℝ => @inner ℝ _ _ ε (f₀ + t • e_j))
+        =
+      (fun t : ℝ => @inner ℝ _ _ ε f₀ + t * @inner ℝ _ _ ε e_j) := by
+    funext t
+    simp [inner_add_right, real_inner_smul_right]
+  rw [show
+      (fun t : ℝ =>
+        @inner ℝ _ _ ε (f₀ + t • EuclideanSpace.single j (1 : ℝ)))
+        =
+      (fun t : ℝ => @inner ℝ _ _ ε (f₀ + t • e_j)) by
+        funext t
+        simp [e_j]]
+  rw [htarget]
+  simpa [hcoord] using hscalar
 
 end

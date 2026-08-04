@@ -100,11 +100,12 @@ Real credentials belong in `.env`, which is ignored. Commit only
 
 ## DFT certificate example
 
-The DFT certificate example depends on an external Lean project containing the
-`Testv2` formalization. Set `DFT_PROJECT` to that project root:
+The DFT certificate example uses the vendored `examples/dft/lean` Testv2
+formalization by default. Set `DFT_PROJECT` only when checking a separate
+reviewed Testv2 checkout:
 
 ```bash
-export DFT_PROJECT=/path/to/Testv2/project
+export DFT_PROJECT=examples/dft/lean
 make dftcert-obligations
 make dftcert-assemble-example
 make dftcert-certify-example
@@ -113,6 +114,22 @@ make dftcert-certify-example
 `dftcert-certify-example` requires `--trusted-local` internally and is intended
 only for the repository-owned example certificate. Do not use that mode for
 arbitrary uploaded Lean source.
+
+## DFT presentation carousel
+
+These commands create separate, inspectable run directories for the four
+important outcomes. Only `certified` runs agentic Lean proof search; the other
+three are deterministic policy fixtures that demonstrate an explicit refusal
+before proof search.
+
+```bash
+./noether demo dft --scenario certified --llm maestro --run-dir build/runs/dft-certified
+./noether demo dft --scenario non-self-adjoint --run-dir build/runs/dft-non-self-adjoint
+./noether demo dft --scenario missing-assumptions --run-dir build/runs/dft-missing
+./noether demo dft --scenario formalization-gap --run-dir build/runs/dft-gap
+
+./noether tui --run-dir build/runs/dft-non-self-adjoint --once
+```
 
 ## Benchmark interpretation
 

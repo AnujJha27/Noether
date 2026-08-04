@@ -30,7 +30,7 @@
         "required": ["adjacency", "receptive_field", "required_couplings"],
         "additionalProperties": false,
         "properties": {
-          "adjacency": {"type": "string", "enum": ["fin1_complete"]},
+          "adjacency": {"type": "string", "enum": ["fin1_complete", "chain4", "ring6"]},
           "receptive_field": {"type": "integer"},
           "required_couplings": {"type": "array", "items": {"type": "object"}}
         }
@@ -40,8 +40,8 @@
         "required": ["construction", "sites"],
         "additionalProperties": false,
         "properties": {
-          "construction": {"type": "string", "enum": ["zero"]},
-          "sites": {"type": "integer", "enum": [1]}
+          "construction": {"type": "string", "enum": ["zero", "symmetric_residual"]},
+          "sites": {"type": "integer", "enum": [1, 4, 6]}
         }
       }
     }
@@ -151,6 +151,58 @@
       "declarations": {
         "xc_discontinuity_compatible": "theorem generated_xc_discontinuity : Nonempty (XCDiscontinuityCertificate DFTCert.Example.xcEnergy)",
         "spatial_nonlocality_compatible": "theorem generated_spatial_coverage : IsKLocal (Fin 1) DFTCert.Example.adjacency 0 DFTCert.Example.learnedSelfEnergy",
+        "self_adjoint": "theorem generated_self_adjoint : IsSelfAdjoint DFTCert.Example.learnedSelfEnergy"
+      }
+    },
+    {
+      "id": "dft-v1-hinge-residual-chain4-k3",
+      "module": "Testv2.Verifier",
+      "preamble_template": "lean/templates/dft-v1-hinge-residual-chain4-k3.lean",
+      "assembly_template": "lean/templates/dft-v1-hinge-residual-chain4-k3-assembly.lean",
+      "proof_limits": {
+        "wall_time_ms": 600000,
+        "cpu_time_s": 480,
+        "memory_mb": 8192
+      },
+      "ir_match": {
+        "ir_schema_version": 1,
+        "xc": {
+          "representation": "piecewise_hinge",
+          "boundary": 0,
+          "left_slope": 0,
+          "right_slope": 1
+        },
+        "spatial": {
+          "adjacency": "chain4",
+          "receptive_field": 3,
+          "required_couplings": [{"source": 0, "target": 3}]
+        },
+        "operator": {
+          "construction": "symmetric_residual",
+          "sites": 4
+        }
+      },
+      "declarations": {
+        "xc_discontinuity_compatible": "theorem generated_xc_discontinuity : Nonempty (XCDiscontinuityCertificate DFTCert.Example.xcEnergy)",
+        "spatial_nonlocality_compatible": "theorem generated_spatial_coverage : IsKLocal (Fin 4) DFTCert.Example.adjacency 3 DFTCert.Example.learnedSelfEnergy",
+        "self_adjoint": "theorem generated_self_adjoint : IsSelfAdjoint DFTCert.Example.learnedSelfEnergy"
+      }
+    },
+    {
+      "id": "dft-v1-hinge-residual-ring6-k3",
+      "module": "Testv2.Verifier",
+      "preamble_template": "lean/templates/dft-v1-hinge-residual-ring6-k3.lean",
+      "assembly_template": "lean/templates/dft-v1-hinge-residual-ring6-k3-assembly.lean",
+      "proof_limits": {"wall_time_ms": 600000, "cpu_time_s": 480, "memory_mb": 8192},
+      "ir_match": {
+        "ir_schema_version": 1,
+        "xc": {"representation": "piecewise_hinge", "boundary": 0, "left_slope": 0, "right_slope": 1},
+        "spatial": {"adjacency": "ring6", "receptive_field": 3, "required_couplings": [{"source": 0, "target": 3}]},
+        "operator": {"construction": "symmetric_residual", "sites": 6}
+      },
+      "declarations": {
+        "xc_discontinuity_compatible": "theorem generated_xc_discontinuity : Nonempty (XCDiscontinuityCertificate DFTCert.Example.xcEnergy)",
+        "spatial_nonlocality_compatible": "theorem generated_spatial_coverage : IsKLocal (Fin 6) DFTCert.Example.adjacency 3 DFTCert.Example.learnedSelfEnergy",
         "self_adjoint": "theorem generated_self_adjoint : IsSelfAdjoint DFTCert.Example.learnedSelfEnergy"
       }
     }

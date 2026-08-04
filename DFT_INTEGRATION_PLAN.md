@@ -23,8 +23,9 @@ versioned set of formally stated DFT physics obligations. It does not certify
 trained weights, numerical accuracy, convergence, generalization, or agreement
 with experimental data.
 
-The initial policy uses an external Testv2 Lean formalization supplied through
-`DFT_PROJECT` and requires:
+The initial policy uses the vendored Testv2 Lean formalization in
+`examples/dft/lean` by default. `DFT_PROJECT` may select a separate reviewed
+checkout. It requires:
 
 1. XC derivative-discontinuity compatibility;
 2. spatial coverage/nonlocality compatibility;
@@ -285,6 +286,13 @@ Examples:
 ./noether demo physics-toy --llm openrouter-free
 ./noether demo physics-toy --llm maestro
 ./noether demo dft --project "$DFT_PROJECT" --llm maestro
+
+# DFT presentation carousel: proof success, policy failure, missing evidence,
+# and a formalization gap.
+./noether demo dft --scenario certified --llm maestro
+./noether demo dft --scenario non-self-adjoint
+./noether demo dft --scenario missing-assumptions
+./noether demo dft --scenario formalization-gap
 ```
 
 ## Deferred work

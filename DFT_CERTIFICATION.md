@@ -205,6 +205,30 @@ cd ../../..
 ./noether tui --run-dir build/runs/noether-dft --once
 ```
 
+### Presentation scenarios
+
+The DFT demo has four named scenarios. They deliberately separate a reviewed
+Lean proof-search success from policy rejection, missing evidence, and an
+unformalized-but-plausible description:
+
+```bash
+# Full agentic search over the reviewed canonical Lean architecture.
+./noether demo dft --scenario certified --llm maestro --run-dir build/runs/dft-certified
+
+# No proof search: the submitted claim explicitly contradicts self-adjointness.
+./noether demo dft --scenario non-self-adjoint --run-dir build/runs/dft-non-self-adjoint
+
+# No proof search: required architecture claims were not supplied.
+./noether demo dft --scenario missing-assumptions --run-dir build/runs/dft-missing
+
+# No proof search: all claims are present, but no reviewed Lean profile matches.
+./noether demo dft --scenario formalization-gap --run-dir build/runs/dft-gap
+```
+
+Inspect a scenario with `./noether tui --run-dir <run-directory>`. The latter
+three are deterministic policy fixtures: they show why Noether refuses to run
+proof search, rather than presenting a failed proof search as a physics result.
+
 For local or cluster-hosted OpenAI-compatible models, use the demo presets or
 the command adapter. The bundled physics-toy demo does not require Testv2:
 

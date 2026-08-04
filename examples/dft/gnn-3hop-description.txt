@@ -1,0 +1,4 @@
+A four-site chain graph neural network uses three message-passing layers, so
+information can travel from site 0 to site 3 along 0--1--2--3. Its learned
+self-energy is a symmetric residual linear kernel, and its XC component is a
+piecewise hinge with a nonzero derivative discontinuity at electron number 0.

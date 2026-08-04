@@ -17,7 +17,7 @@ from dftcert.english import interpret_english
 from dftcert.extraction import apply_extraction_result
 from dftcert.hypothesis import draft_hypothesis, policy_coverage
 from dftcert.manifest import ArchitectureManifest, ManifestError
-from dftcert.model_assessment import assessment_payload
+from dftcert.model_assessment import _extract_json_object, assessment_payload, assumption_rows
 from dftcert.obligations import generate_obligations
 from dftcert.policy import Policy, PolicyError
 from dftcert.pt2 import inspect_pt2, pending_manifest
@@ -50,6 +50,10 @@ class PolicyTests(unittest.TestCase):
             path.write_text(json.dumps(value))
             with self.assertRaises(PolicyError):
                 Policy.load(path)
+
+    def test_llm_json_extractor_accepts_fenced_object_and_trailing_text(self):
+        value = _extract_json_object("```json\n{\"facts\": {}}\n```\nignored")
+        self.assertEqual(value, {"facts": {}})
 
 
 class ManifestTests(unittest.TestCase):
@@ -118,6 +122,40 @@ class ManifestTests(unittest.TestCase):
             self.assertNotIn("target", task)
             self.assertIn(manifest.value["manifest_sha256"], task["preamble"])
             self.assertGreaterEqual(task["limits"]["wall_time_ms"], 600000)
+
+    def test_three_hop_gnn_profile_generates_matching_tasks(self):
+        manifest = ArchitectureManifest.english_draft(
+            model_id="chain4-gnn",
+            description=(ROOT / "examples/dft/gnn-3hop-description.txt").read_text(),
+            policy=self.policy,
+        )
+        facts = json.loads((ROOT / "examples/dft/gnn-3hop-facts.json").read_text())
+        architecture_ir = json.loads(
+            (ROOT / "examples/dft/gnn-3hop-architecture-ir.json").read_text()
+        )
+        manifest.confirm_english(self.policy, facts)
+        manifest.attach_architecture_ir(self.policy, architecture_ir)
+        result = generate_obligations(manifest, self.policy)
+        self.assertEqual(result["status"], "obligations_generated")
+        self.assertEqual(result["profile"], "dft-v1-hinge-residual-chain4-k3")
+        self.assertIn("Fin 4", result["obligations"][1]["theorem"])
+
+    def test_ring_gnn_profile_generates_matching_tasks(self):
+        manifest = ArchitectureManifest.english_draft(
+            model_id="ring6-gnn",
+            description=(ROOT / "examples/dft/gnn-ring6-3hop-description.txt").read_text(),
+            policy=self.policy,
+        )
+        manifest.confirm_english(
+            self.policy, json.loads((ROOT / "examples/dft/gnn-ring6-3hop-facts.json").read_text())
+        )
+        manifest.attach_architecture_ir(
+            self.policy,
+            json.loads((ROOT / "examples/dft/gnn-ring6-3hop-architecture-ir.json").read_text()),
+        )
+        result = generate_obligations(manifest, self.policy)
+        self.assertEqual(result["profile"], "dft-v1-hinge-residual-ring6-k3")
+        self.assertIn("Fin 6", result["obligations"][1]["theorem"])
 
 
 class EnglishInterpreterTests(unittest.TestCase):
@@ -251,6 +289,22 @@ class HypothesisIntakeTests(unittest.TestCase):
         self.assertIn("ASSUMPTIONS", rendered)
         self.assertIn("VERDICT EVIDENCE", rendered)
         self.assertNotIn("events.jsonl", rendered)
+
+    def test_assessment_carries_non_authoritative_rationale_review(self):
+        manifest = draft_hypothesis(
+            model_id="reviewed-rationale",
+            hypothesis="The model has a self-adjoint learned operator.",
+            policy=self.policy,
+        )
+        manifest.value["proof_reviews"] = [{
+            "fact": "self_adjoint",
+            "claimed_reasoning": "The operator is symmetric.",
+            "assessment": "supports",
+            "review": "This supports the claim, but requires Lean verification.",
+            "formal_status": "not_lean_verified",
+        }]
+        row = next(item for item in assumption_rows(manifest, self.policy) if item["id"] == "self_adjoint")
+        self.assertEqual(row["proof_review"]["formal_status"], "not_lean_verified")
 
     def test_run_dir_prefers_assessment_artifact(self):
         manifest = draft_hypothesis(

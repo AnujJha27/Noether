@@ -1,0 +1,5 @@
+A six-site molecular ring graph neural network uses three message-passing
+layers. Its antipodal sites 0 and 3 communicate along 0--1--2--3, so the
+learned self-energy can cover that required coupling. The learned kernel is a
+symmetric residual linear operator, and the XC component is a piecewise hinge
+with a nonzero derivative discontinuity at electron number 0.

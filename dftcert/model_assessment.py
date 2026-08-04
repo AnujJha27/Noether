@@ -55,6 +55,13 @@ def assumption_rows(manifest: ArchitectureManifest, policy: Policy) -> list[dict
                 ),
                 None,
             ),
+            "proof_review": next(
+                (
+                    item for item in manifest.value.get("proof_reviews", [])
+                    if isinstance(item, dict) and item.get("fact") == obligation.fact
+                ),
+                None,
+            ),
         })
     return rows
 
@@ -66,6 +73,44 @@ def _status_from_answer(answer: str) -> str:
     if lowered in {"n", "no", "reject", "rejected", "false"}:
         return "rejected"
     return "unknown"
+
+
+def apply_assumption_status(
+    manifest: ArchitectureManifest, *, fact_id: str, status: str,
+) -> None:
+    facts = manifest.value.get("facts", {})
+    assumptions = manifest.value.get("assumptions", [])
+    if not isinstance(facts, dict) or not isinstance(assumptions, list):
+        return
+    normalized = status if status in {"confirmed", "rejected", "unknown"} else "unknown"
+    for item in assumptions:
+        if isinstance(item, dict) and item.get("id") == fact_id:
+            item["status"] = normalized
+            break
+    if normalized == "confirmed" and fact_id in facts:
+        facts[fact_id]["evidence"]["kind"] = "user_attestation"
+    elif normalized == "rejected" and fact_id in facts:
+        value = facts[fact_id].get("value")
+        if isinstance(value, dict) and "satisfied" in value:
+            value["satisfied"] = False
+        facts[fact_id]["evidence"]["kind"] = "user_attestation"
+    elif normalized == "unknown" and fact_id in facts:
+        facts.pop(fact_id, None)
+
+
+def finalize_assumption_review(manifest: ArchitectureManifest, policy: Policy) -> None:
+    facts = manifest.value.get("facts", {})
+    if not isinstance(facts, dict):
+        facts = {}
+        manifest.value["facts"] = facts
+    missing = [name for name in policy.required_facts if name not in facts]
+    manifest.value["unresolved_facts"] = missing
+    if missing:
+        manifest.value["status"] = "draft"
+    else:
+        manifest.value["status"] = "confirmed"
+        manifest.value["confirmed_at"] = datetime.now(timezone.utc).isoformat()
+    manifest.refresh_hash()
 
 
 def confirm_assumptions_interactively(
@@ -100,38 +145,45 @@ def confirm_assumptions_interactively(
             print(f"\n{fact_id}: {json.dumps(value, sort_keys=True)}", file=output_stream)
             if item.get("confidence"):
                 print(f"confidence: {item['confidence']}", file=output_stream)
+        review = next(
+            (
+                value for value in manifest.value.get("proof_reviews", [])
+                if isinstance(value, dict) and value.get("fact") == fact_id
+            ),
+            None,
+        )
+        if review:
+            print(
+                f"LLM rationale review ({review.get('assessment', 'unknown')}): "
+                f"{review.get('review', '')}",
+                file=output_stream,
+            )
         print("confirm? [y/n/u]: ", end="", file=output_stream, flush=True)
         answer = input_stream.readline()
         status = _status_from_answer(answer)
-        item["status"] = status
-        if status == "confirmed" and fact_id in facts:
-            facts[fact_id]["evidence"]["kind"] = "user_attestation"
-        elif status == "rejected" and fact_id in facts:
-            value = facts[fact_id].get("value")
-            if isinstance(value, dict) and "satisfied" in value:
-                value["satisfied"] = False
-            facts[fact_id]["evidence"]["kind"] = "user_attestation"
-        elif status == "unknown" and fact_id in facts:
-            facts.pop(fact_id, None)
-    missing = [name for name in policy.required_facts if name not in facts]
-    manifest.value["unresolved_facts"] = missing
-    if missing:
-        manifest.value["status"] = "draft"
-    else:
-        manifest.value["status"] = "confirmed"
-        manifest.value["confirmed_at"] = datetime.now(timezone.utc).isoformat()
-    manifest.refresh_hash()
+        apply_assumption_status(manifest, fact_id=fact_id, status=status)
+    finalize_assumption_review(manifest, policy)
 
 
 def _extract_json_object(text: str) -> dict[str, Any]:
+    stripped = text.strip()
+    if stripped.startswith("```"):
+        lines = stripped.splitlines()
+        if lines and lines[0].startswith("```"):
+            lines = lines[1:]
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        stripped = "\n".join(lines).strip()
     try:
-        value = json.loads(text)
+        value = json.loads(stripped)
     except json.JSONDecodeError:
-        start = text.find("{")
-        end = text.rfind("}")
-        if start < 0 or end <= start:
+        start = stripped.find("{")
+        if start < 0:
             raise ValueError("LLM response did not contain a JSON object")
-        value = json.loads(text[start:end + 1])
+        try:
+            value, _ = json.JSONDecoder().raw_decode(stripped[start:])
+        except json.JSONDecodeError as error:
+            raise ValueError("LLM response contained malformed JSON") from error
     if not isinstance(value, dict):
         raise ValueError("LLM response JSON must be an object")
     return value
@@ -150,6 +202,7 @@ def _chat_completions(*, base_url: str, model: str, system: str, prompt: str,
         ],
         "temperature": 0.1,
         "max_tokens": int(os.environ.get("NOETHER_OPENAI_MAX_TOKENS", "4096")),
+        "response_format": {"type": "json_object"},
     }
     headers = {"Content-Type": "application/json", "Accept": "application/json"}
     api_key = os.environ.get("NOETHER_OPENAI_API_KEY")
@@ -158,19 +211,32 @@ def _chat_completions(*, base_url: str, model: str, system: str, prompt: str,
     request = urllib.request.Request(
         endpoint, data=json.dumps(body).encode("utf-8"), headers=headers, method="POST"
     )
+    def request_content() -> str:
+        try:
+            with urllib.request.urlopen(request, timeout=timeout_s) as response:
+                payload = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as error:
+            detail = error.read().decode("utf-8", errors="replace")
+            raise RuntimeError(f"assumption extraction failed: HTTP {error.code}: {detail}") from error
+        choices = payload.get("choices")
+        if not isinstance(choices, list) or not choices:
+            raise RuntimeError("assumption extraction response had no choices")
+        message = choices[0].get("message")
+        if not isinstance(message, dict) or not isinstance(message.get("content"), str):
+            raise RuntimeError("assumption extraction response had no text content")
+        return message["content"]
+
+    first = request_content()
     try:
-        with urllib.request.urlopen(request, timeout=timeout_s) as response:
-            payload = json.loads(response.read().decode("utf-8"))
-    except urllib.error.HTTPError as error:
-        detail = error.read().decode("utf-8", errors="replace")
-        raise RuntimeError(f"assumption extraction failed: HTTP {error.code}: {detail}") from error
-    choices = payload.get("choices")
-    if not isinstance(choices, list) or not choices:
-        raise RuntimeError("assumption extraction response had no choices")
-    message = choices[0].get("message")
-    if not isinstance(message, dict) or not isinstance(message.get("content"), str):
-        raise RuntimeError("assumption extraction response had no text content")
-    return _extract_json_object(message["content"])
+        return _extract_json_object(first)
+    except ValueError:
+        # A local model occasionally ignores JSON mode. Retry once with an
+        # explicit repair instruction rather than interpreting malformed text.
+        body["messages"][0]["content"] += (
+            "\n\nYour previous response was malformed. Return one syntactically valid JSON object only."
+        )
+        request.data = json.dumps(body).encode("utf-8")
+        return _extract_json_object(request_content())
 
 
 def draft_with_llm(
@@ -186,6 +252,10 @@ def draft_with_llm(
             },
             "evidence": {"type": "object"},
             "questions": {"type": "array"},
+            "proof_reviews": {
+                "type": "object",
+                "description": "Per-fact critique of any explanation or proof supplied in the description.",
+            },
         },
         "required": ["facts", "evidence", "questions"],
     }
@@ -195,7 +265,9 @@ def draft_with_llm(
     }
     prompt = (
         "Extract draft DFT physics assumptions from the model description. "
-        "Do not invent unstated assumptions. Use only these fact names and schemas:\n"
+        "Do not invent unstated assumptions. If the author gives an explanation or proof, "
+        "critique whether it supports the stated policy fact; it is not a Lean proof. "
+        "Use only these fact names and schemas:\n"
         f"{json.dumps(fact_schema, indent=2)}\n\n"
         "Description:\n"
         f"{description}"
@@ -251,6 +323,22 @@ def draft_with_llm(
                 "question": f"Does the model satisfy: {obligation.description}",
                 "reason": "The LLM did not find explicit support in the description.",
             })
+    raw_reviews = result.get("proof_reviews", {})
+    proof_reviews = []
+    if isinstance(raw_reviews, dict):
+        for fact, review in raw_reviews.items():
+            if fact not in allowed or not isinstance(review, dict):
+                continue
+            assessment = review.get("assessment")
+            if assessment not in {"supports", "insufficient", "contradicts"}:
+                assessment = "insufficient"
+            proof_reviews.append({
+                "fact": fact,
+                "claimed_reasoning": str(review.get("claimed_reasoning", "")),
+                "assessment": assessment,
+                "review": str(review.get("review", "")),
+                "formal_status": "not_lean_verified",
+            })
             assumptions.append({
                 "id": obligation.fact,
                 "statement": obligation.description,
@@ -266,6 +354,7 @@ def draft_with_llm(
     manifest.value["assumptions"] = assumptions
     manifest.value["clarification_questions"] = questions
     manifest.value["traceability"] = traceability
+    manifest.value["proof_reviews"] = proof_reviews
     manifest.refresh_hash()
     return manifest
 
@@ -315,4 +404,3 @@ def assessment_payload(
     }
     payload["assessment_sha256"] = sha256_value(payload)
     return payload
-

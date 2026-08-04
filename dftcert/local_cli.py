@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import curses
 import json
 import os
 import shlex
@@ -19,6 +20,7 @@ from .model_assessment import (
     draft_with_llm,
     read_description,
 )
+from .hypothesis import draft_hypothesis
 from .pipeline import (
     LocalPipeline, LocalPipelineConfig, LocalRun, PipelineError, command_tuple,
 )
@@ -46,6 +48,39 @@ CLUSTER_LLM_PRESETS = {
     "violin": {
         "base_url": "http://violinteg:11437/v1/chat/completions",
         "model": "qwen3.6-64k:latest",
+    },
+}
+
+DFT_DEMO_SCENARIOS = {
+    "certified": {
+        "description": "Canonical reviewed DFT architecture; runs the full Lean proof-search workflow.",
+        "mode": "proof_search",
+    },
+    "non-self-adjoint": {
+        "description": "Explicitly non-self-adjoint operator; the policy rejects it before proof search.",
+        "mode": "assessment",
+        "hypothesis": (
+            "The architecture has an XC derivative discontinuity at electron-number "
+            "boundaries and nonlocal spatial coupling, but its learned self-energy "
+            "operator is explicitly non-self-adjoint."
+        ),
+    },
+    "missing-assumptions": {
+        "description": "Nonlocality is described, but two required physics claims are absent.",
+        "mode": "assessment",
+        "hypothesis": (
+            "The proposed DFT model uses nonlocal message passing to propagate density "
+            "information across sites."
+        ),
+    },
+    "formalization-gap": {
+        "description": "All three policy claims are described, but no reviewed Lean architecture profile is supplied.",
+        "mode": "assessment",
+        "hypothesis": (
+            "The architecture supports an XC derivative discontinuity at electron-number "
+            "boundaries, uses nonlocal spatial coupling, and enforces a self-adjoint "
+            "learned self-energy operator."
+        ),
     },
 }
 
@@ -146,7 +181,16 @@ def parser() -> argparse.ArgumentParser:
         default="physics-toy",
     )
     demo.add_argument("--run-dir")
-    demo.add_argument("--project", help="required for dft unless DFT_PROJECT is set")
+    demo.add_argument(
+        "--scenario",
+        choices=tuple(DFT_DEMO_SCENARIOS),
+        default="certified",
+        help="DFT demo case; only 'certified' runs Lean proof search",
+    )
+    demo.add_argument(
+        "--project",
+        help="optional reviewed Testv2 project; defaults to examples/dft/lean for DFT",
+    )
     demo.add_argument("--max-rounds", type=int, default=1)
     demo.add_argument(
         "--provider-timeout-s",
@@ -282,8 +326,45 @@ def _load_env_file(path: Path) -> None:
             os.environ[name] = value
 
 
-def _run_demo(options: argparse.Namespace) -> int:
+def _write_dft_assessment_demo(
+    *, options: argparse.Namespace, policy: Policy, scenario: str,
+) -> int:
+    spec = DFT_DEMO_SCENARIOS[scenario]
+    hypothesis = spec["hypothesis"]
+    run_dir = Path(options.run_dir or (ROOT / "build/runs" / f"noether-dft-{scenario}"))
+    manifest = draft_hypothesis(
+        model_id=f"demo-fixture:{scenario}", hypothesis=hypothesis, policy=policy,
+    )
+    report = sanity_report(manifest=manifest, policy=policy)
+    assessment = assessment_payload(manifest=manifest, policy=policy)
+    run_dir.mkdir(parents=True, exist_ok=True)
+    manifest.write(run_dir / "manifest.json")
+    (run_dir / "report.json").write_text(
+        json.dumps(report, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    (run_dir / "assessment.json").write_text(
+        json.dumps(assessment, indent=2, sort_keys=True, ensure_ascii=False) + "\n",
+        encoding="utf-8",
+    )
+    print(json.dumps({
+        "status": "demo_complete",
+        "kind": "dft",
+        "scenario": scenario,
+        "scenario_description": spec["description"],
+        "verdict": assessment["verdict"],
+        "summary": assessment["summary"],
+        "run_dir": str(run_dir),
+        "inspect": f"./noether tui --run-dir {run_dir}",
+        "note": "This scenario stops at policy assessment; it does not claim a Lean proof search ran.",
+    }, sort_keys=True))
+    return 0
+
+
+def _run_demo(options: argparse.Namespace, policy: Policy) -> int:
     _load_env_file(ROOT / ".env")
+    if options.kind == "dft" and options.scenario != "certified":
+        return _write_dft_assessment_demo(options=options, policy=policy, scenario=options.scenario)
     verifier = Path(options.verifier)
     if not verifier.exists():
         raise ValueError(f"verifier not found at {verifier}; run `make` first")
@@ -421,7 +502,15 @@ def _run_assess(options: argparse.Namespace, policy: Policy) -> int:
             timeout_s=options.provider_timeout_s,
         )
     if not options.non_interactive and sys.stdin.isatty():
-        confirm_assumptions_interactively(manifest, policy)
+        if sys.stdout.isatty():
+            try:
+                from .tui import confirm_assumptions_tui
+
+                confirm_assumptions_tui(manifest, policy)
+            except curses.error:
+                confirm_assumptions_interactively(manifest, policy)
+        else:
+            confirm_assumptions_interactively(manifest, policy)
     report = sanity_report(manifest=manifest, policy=policy)
     assessment = assessment_payload(manifest=manifest, policy=policy)
     run_dir.mkdir(parents=True, exist_ok=True)
@@ -501,7 +590,7 @@ def main(argv: list[str] | None = None) -> int:
             from orchestrator.cli import main as orchestrator_main
             return orchestrator_main(options.orchestrator_args)
         elif options.command == "demo":
-            return _run_demo(options)
+            return _run_demo(options, policy)
         elif options.command == "assess":
             return _run_assess(options, policy)
         else:

@@ -9,6 +9,10 @@ from typing import Any
 
 from .hypothesis import draft_hypothesis, policy_coverage
 from .manifest import ArchitectureManifest
+from .model_assessment import (
+    apply_assumption_status,
+    finalize_assumption_review,
+)
 from .policy import Policy
 from .report import sanity_report
 
@@ -537,6 +541,179 @@ def coverage_lines(data: dict[str, Any], width: int) -> list[tuple[str, str]]:
         lines.append((f"  module: {item['module']}", "muted"))
         lines.append((f"  facts: {', '.join(item['facts'])}", "muted"))
     return lines
+
+
+def confirm_assumptions_tui(manifest: ArchitectureManifest, policy: Policy) -> None:
+    assumptions = [
+        item for item in manifest.value.get("assumptions", [])
+        if isinstance(item, dict)
+    ]
+    if not assumptions:
+        finalize_assumption_review(manifest, policy)
+        return
+
+    index = 0
+    message = "y accept · n reject · u unknown · ↑/↓ move · Enter finish · q cancel"
+
+    def attr(name: str) -> int:
+        pairs = {"muted": 1, "title": 2, "good": 3, "warn": 4, "bad": 5, "gap": 6}
+        return curses.color_pair(pairs.get(name, 1)) if curses.has_colors() else 0
+
+    def init_colors() -> None:
+        if not curses.has_colors():
+            return
+        curses.start_color()
+        curses.use_default_colors()
+        palette = {
+            "muted": curses.COLOR_WHITE,
+            "title": curses.COLOR_RED,
+            "good": curses.COLOR_GREEN,
+            "warn": curses.COLOR_YELLOW,
+            "bad": curses.COLOR_RED,
+            "gap": curses.COLOR_MAGENTA,
+        }
+        for pair_index, name in enumerate(palette, start=1):
+            curses.init_pair(pair_index, palette[name], -1)
+
+    def draw_box(screen: Any, y: int, x: int, h: int, w: int, title: str) -> None:
+        if h < 2 or w < 2:
+            return
+        screen.attron(attr("title"))
+        screen.addstr(y, x, "┌" + "─" * (w - 2) + "┐")
+        for row in range(y + 1, y + h - 1):
+            screen.addstr(row, x, "│")
+            screen.addstr(row, x + w - 1, "│")
+        screen.addstr(y + h - 1, x, "└" + "─" * (w - 2) + "┘")
+        screen.addstr(y, x + 2, f" {title} "[:max(0, w - 4)])
+        screen.attroff(attr("title"))
+
+    def row_status(item: dict[str, Any]) -> str:
+        return str(item.get("status", "needs_user_confirmation"))
+
+    def draw(screen: Any) -> None:
+        screen.erase()
+        height, width = screen.getmaxyx()
+        if height < 20 or width < 78:
+            screen.addstr(0, 0, "terminal too small; use at least 78x20")
+            screen.refresh()
+            return
+        left_w = max(32, min(48, width // 3))
+        right_x = left_w + 2
+        right_w = width - left_w - 3
+        screen.addstr(0, 2, "† NOETHER ASSUMPTION REVIEW", attr("title") | curses.A_BOLD)
+        screen.addstr(0, 32, message[:max(0, width - 34)], attr("muted"))
+
+        draw_box(screen, 2, 1, height - 3, left_w, "extracted assumptions")
+        for row, item in enumerate(assumptions[:height - 7]):
+            selected = row == index
+            status = row_status(item)
+            marker = "›" if selected else " "
+            color = status_color(status)
+            text = f"{marker} {item.get('id', 'assumption')} [{label(status)}]"
+            screen.addstr(4 + row, 3, text[:left_w - 4], attr(color) | (curses.A_REVERSE if selected else 0))
+
+        current = assumptions[index]
+        status = row_status(current)
+        draw_box(screen, 2, right_x, height - 3, right_w, "decision")
+        y = 4
+        screen.addstr(y, right_x + 2, f"{current.get('id', 'assumption')}  [{label(status)}]",
+                      attr(status_color(status)) | curses.A_BOLD)
+        y += 2
+        statement = str(current.get("statement") or current.get("principle") or "")
+        for line in wrap_lines(statement, right_w - 4):
+            if y >= height - 9:
+                break
+            screen.addstr(y, right_x + 2, line[:right_w - 4], attr("muted"))
+            y += 1
+        y += 1
+        value = current.get("value")
+        if value is None:
+            screen.addstr(y, right_x + 2, "value: missing from model text", attr("warn"))
+            y += 1
+        else:
+            for line in wrap_lines(f"value: {_short_json(value, right_w - 11)}", right_w - 4):
+                if y >= height - 7:
+                    break
+                screen.addstr(y, right_x + 2, line[:right_w - 4], attr("muted"))
+                y += 1
+        evidence = str(current.get("evidence") or current.get("rationale") or "").strip()
+        if evidence and y < height - 7:
+            y += 1
+            for line in wrap_lines(f"evidence: {evidence}", right_w - 4):
+                if y >= height - 7:
+                    break
+                screen.addstr(y, right_x + 2, line[:right_w - 4], attr("muted"))
+                y += 1
+        question = str(current.get("question") or "").strip()
+        if question and y < height - 7:
+            y += 1
+            for line in wrap_lines(f"question: {question}", right_w - 4):
+                if y >= height - 7:
+                    break
+                screen.addstr(y, right_x + 2, line[:right_w - 4], attr("warn"))
+                y += 1
+
+        reviewed = sum(
+            1 for item in assumptions
+            if row_status(item) in {"confirmed", "rejected", "unknown"}
+        )
+        footer = f"reviewed {reviewed}/{len(assumptions)} · Enter writes assessment when all are reviewed"
+        screen.addstr(height - 4, right_x + 2, footer[:right_w - 4], attr("title"))
+        screen.refresh()
+
+    def main(screen: Any) -> None:
+        nonlocal index, message
+        try:
+            curses.curs_set(0)
+        except curses.error:
+            pass
+        screen.keypad(True)
+        init_colors()
+        while True:
+            draw(screen)
+            try:
+                key = screen.get_wch()
+            except curses.error:
+                continue
+            if key in ("q", "Q", "\x1b", "\x11"):
+                raise KeyboardInterrupt("assumption review cancelled")
+            if key in (curses.KEY_DOWN, "j"):
+                index = min(len(assumptions) - 1, index + 1)
+                continue
+            if key in (curses.KEY_UP, "k"):
+                index = max(0, index - 1)
+                continue
+            if key in ("y", "Y"):
+                apply_assumption_status(
+                    manifest, fact_id=str(assumptions[index].get("id")), status="confirmed"
+                )
+                index = min(len(assumptions) - 1, index + 1)
+                continue
+            if key in ("n", "N"):
+                apply_assumption_status(
+                    manifest, fact_id=str(assumptions[index].get("id")), status="rejected"
+                )
+                index = min(len(assumptions) - 1, index + 1)
+                continue
+            if key in ("u", "U"):
+                apply_assumption_status(
+                    manifest, fact_id=str(assumptions[index].get("id")), status="unknown"
+                )
+                index = min(len(assumptions) - 1, index + 1)
+                continue
+            if key in ("\n", "\r"):
+                pending = [
+                    item.get("id", "assumption")
+                    for item in assumptions
+                    if row_status(item) not in {"confirmed", "rejected", "unknown"}
+                ]
+                if pending:
+                    message = f"still needs decision: {pending[0]}"
+                    continue
+                finalize_assumption_review(manifest, policy)
+                return
+
+    curses.wrapper(main)
 
 
 def render_plain(data: dict[str, Any], *, coverage: bool = False,
