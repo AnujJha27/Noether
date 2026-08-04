@@ -1351,6 +1351,33 @@ def build_run_inspector(path: str | Path) -> dict[str, Any]:
             "manifest": load_json_object(manifest) if manifest.exists() else {},
         }
     state = load_json_object(root / "state.json")
+    if isinstance(state.get("proof_results"), list):
+        results = {
+            item.get("id"): item
+            for item in state["proof_results"]
+            if isinstance(item, dict) and isinstance(item.get("id"), str)
+        }
+        generated = state.get("generation", {}).get("obligations", [])
+        tasks = []
+        if isinstance(generated, list):
+            for task in generated:
+                if not isinstance(task, dict) or not isinstance(task.get("id"), str):
+                    continue
+                result = results.get(task["id"])
+                tasks.append({
+                    "task_id": task["id"],
+                    "status": result.get("status") if result else (
+                        "running" if state.get("status") == "proof_search_running" else task.get("status", "pending")
+                    ),
+                    "task": task,
+                    "artifact": str(root / "state.json"),
+                })
+        state = {
+            "run_id": str(root),
+            "status": state.get("status", "unknown"),
+            "tasks": tasks,
+            "blocked": [],
+        }
     artifacts: list[dict[str, Any]] = []
     artifact_root = root / "artifacts"
     if artifact_root.exists():

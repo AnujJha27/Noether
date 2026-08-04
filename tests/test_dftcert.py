@@ -328,6 +328,21 @@ class HypothesisIntakeTests(unittest.TestCase):
         self.assertEqual(data["inspector_kind"], "assessment")
         self.assertEqual(data["manifest"]["source"]["description"], manifest.value["source"]["description"])
 
+    def test_run_inspector_renders_local_pipeline_generation(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory)
+            (path / "state.json").write_text(json.dumps({
+                "status": "proof_search_running",
+                "proof_results": [],
+                "generation": {"obligations": [{
+                    "id": "ring6-xc", "status": "proof_required",
+                    "theorem": "theorem generated_xc : True",
+                }]},
+            }), encoding="utf-8")
+            data = build_run_inspector(path)
+        self.assertEqual(data["inspector_kind"], "run")
+        self.assertEqual(data["state"]["tasks"][0]["status"], "running")
+
 
 class Pt2Tests(unittest.TestCase):
     def setUp(self):
