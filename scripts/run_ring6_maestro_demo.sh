@@ -15,6 +15,9 @@ test -x ./build/proof-search || { echo 'run make first' >&2; exit 1; }
   --llm maestro \
   --run-dir build/runs/ring6-assess
 
+echo 'Assessment complete. Review the live TUI; press q to continue to Lean certification.'
+./noether tui --run-dir build/runs/ring6-assess
+
 ./noether certify \
   --run-dir build/runs/ring6-certify \
   --description examples/dft/gnn-ring6-3hop-description.txt \
