@@ -34,7 +34,7 @@ from dftcert.structural_v2 import (
     validate_translation,
 )
 from dftcert.pipeline import LocalPipeline, LocalPipelineConfig, LocalRun
-from dftcert.tui import assessment_lines, build_artifact_report, build_hypothesis_report, build_run_inspector, render_plain
+from dftcert.tui import assessment_lines, build_artifact_report, build_hypothesis_report, build_run_inspector, event_summary, render_plain
 from extractors.torch_export_worker import inventory_node
 from examples.dft.evaluate_structural_v2 import score as score_structural_v2
 from orchestrator.providers import MockProvider
@@ -352,6 +352,18 @@ class HypothesisIntakeTests(unittest.TestCase):
             data = build_run_inspector(path)
         self.assertEqual(data["inspector_kind"], "run")
         self.assertEqual(data["state"]["tasks"][0]["status"], "running")
+
+    def test_run_inspector_preserves_orchestrator_model_call_events(self):
+        with tempfile.TemporaryDirectory() as directory:
+            path = pathlib.Path(directory)
+            (path / "state.json").write_text(json.dumps({"status": "running"}), encoding="utf-8")
+            (path / "events.jsonl").write_text(json.dumps({
+                "type": "model_call_started", "time": "2026-08-05T12:34:56+00:00",
+                "agent": "direct", "model": "qwen3.6-64k:latest", "call_index": 1,
+            }) + "\n", encoding="utf-8")
+            event = build_run_inspector(path)["events"][0]
+        self.assertEqual(event["type"], "model_call_started")
+        self.assertIn("12:34:56 model_call_started", event_summary(event)[0])
 
 
 class Pt2Tests(unittest.TestCase):
