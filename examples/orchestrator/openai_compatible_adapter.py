@@ -13,7 +13,7 @@ Environment:
   NOETHER_OPENAI_MODEL=local-coder
   NOETHER_OPENAI_API_KEY=...          # optional for local servers
   NOETHER_OPENAI_MAX_TOKENS=1800      # optional
-  NOETHER_OPENAI_TIMEOUT_S=180        # optional
+NOETHER_OPENAI_TIMEOUT_S=600        # optional; local servers may queue requests
 """
 
 from __future__ import annotations
@@ -58,7 +58,7 @@ def complete(request: dict[str, Any]) -> dict[str, Any]:
     agent = str(request.get("agent", "agent"))
     schema = request.get("schema", {})
     max_tokens = int(os.environ.get("NOETHER_OPENAI_MAX_TOKENS", "1800"))
-    timeout_s = int(os.environ.get("NOETHER_OPENAI_TIMEOUT_S", "180"))
+    timeout_s = int(os.environ.get("NOETHER_OPENAI_TIMEOUT_S", "600"))
     body = {
         "model": model,
         "messages": [

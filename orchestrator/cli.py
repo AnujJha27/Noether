@@ -60,16 +60,17 @@ def arguments(argv: list[str] | None = None) -> argparse.Namespace:
     return parser.parse_args(argv)
 
 
-def provider_from_args(options: argparse.Namespace):
+def provider_from_args(options: argparse.Namespace, *, timeout_s: int | None = None):
+    timeout_s = timeout_s or options.provider_timeout_s
     if options.provider == "mock":
         return MockProvider()
     if options.provider == "command":
         if not options.llm_command:
             raise ValueError("--llm-command is required for the command provider")
-        return CommandProvider(shlex.split(options.llm_command), options.provider_timeout_s)
+        return CommandProvider(shlex.split(options.llm_command), timeout_s)
     if not options.llm_url:
         raise ValueError("--llm-url is required for the HTTP provider")
-    return HttpProvider(options.llm_url, token_from_environment(), options.provider_timeout_s)
+    return HttpProvider(options.llm_url, token_from_environment(), timeout_s)
 
 
 def provider_from_route_spec(spec: dict[str, Any], *, default_timeout_s: int):
@@ -122,11 +123,12 @@ def main(argv: list[str] | None = None) -> int:
         options = arguments(argv)
         if options.max_epochs <= 0 or options.stagnation_epochs <= 0:
             raise ValueError("epoch budgets must be positive")
-        provider = provider_from_args(options)
+        queue_safe_timeout = options.provider_timeout_s * max(1, options.agent_parallelism)
+        provider = provider_from_args(options, timeout_s=queue_safe_timeout)
         route_providers = (
             provider_routes_from_file(
                 options.provider_routes,
-                default_timeout_s=options.provider_timeout_s,
+                default_timeout_s=queue_safe_timeout,
             )
             if options.provider_routes else None
         )

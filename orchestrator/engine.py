@@ -157,6 +157,7 @@ class Orchestrator:
         self._budget_lock = threading.Lock()
         self._model_calls = 0
         self._model_call_records: list[dict[str, Any]] = []
+        self._active_agent_parallelism = self.config.max_agent_parallelism
         self.progress_sink = progress_sink
 
     def _progress(self, event: dict[str, Any]) -> None:
@@ -323,7 +324,7 @@ class Orchestrator:
         if not assignments:
             return []
         results: dict[str, tuple[SearchNode | None, Handoff | None, dict[str, Any] | None, str | None]] = {}
-        with ThreadPoolExecutor(max_workers=min(self.config.max_agent_parallelism, len(assignments))) as pool:
+        with ThreadPoolExecutor(max_workers=min(self._active_agent_parallelism, len(assignments))) as pool:
             futures = [
                 pool.submit(
                     self._propose, task, assignment.role, round_number, attempts,
@@ -334,6 +335,19 @@ class Orchestrator:
             for future in futures:
                 role, parent, handoff, response, error = future.result()
                 results[role] = (parent, handoff, response, error)
+        if (
+            self._active_agent_parallelism > 1
+            and any(error and "timed out" in error.lower() for *_, error in results.values())
+        ):
+            previous = self._active_agent_parallelism
+            self._active_agent_parallelism = max(1, previous // 2)
+            events.append({
+                "type": "model_parallelism_backoff",
+                "round": round_number,
+                "previous_parallelism": previous,
+                "new_parallelism": self._active_agent_parallelism,
+                "reason": "provider queue timeout",
+            })
         for assignment in assignments:
             if assignment.receipt is not None:
                 receipts.append(assignment.receipt)

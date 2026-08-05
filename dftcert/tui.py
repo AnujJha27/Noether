@@ -271,6 +271,13 @@ def event_summary(event: dict[str, Any]) -> tuple[str, str]:
             f"round={event.get('round')} status={event.get('status')} "
             f"attempts={event.get('attempt_count')} winner={event.get('winner_id')}"
         )
+    elif kind == "model_parallelism_backoff":
+        color = "warn"
+        detail = (
+            f"round={event.get('round')} parallelism "
+            f"{event.get('previous_parallelism')}→{event.get('new_parallelism')} "
+            f"reason={event.get('reason')}"
+        )
     elif kind in {"task_started", "task_completed", "search_completed"}:
         color = status_color(str(event.get("status", "running")))
         detail = f"status={event.get('status', 'running')}"

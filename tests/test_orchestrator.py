@@ -16,7 +16,7 @@ from orchestrator.engine import Orchestrator, SearchConfig
 from orchestrator.models import SearchTask
 from orchestrator.permissions import PermissionPolicy
 from orchestrator.provider_router import ProviderRouter
-from orchestrator.providers import CommandProvider, MockProvider
+from orchestrator.providers import CommandProvider, MockProvider, ProviderError
 from orchestrator.replay import replay_search_result
 from orchestrator.run_manager import RunStore
 from orchestrator.verifier import VerifierClient
@@ -57,6 +57,11 @@ class CapturingProvider(MockProvider):
     def complete(self, *, agent, system, prompt, schema):
         self.prompts.append({"agent": agent, "prompt": prompt})
         return super().complete(agent=agent, system=system, prompt=prompt, schema=schema)
+
+
+class TimeoutProvider(MockProvider):
+    def complete(self, **kwargs):
+        raise ProviderError("LLM command timed out after 120 seconds")
 
 
 class ModelTests(unittest.TestCase):
@@ -194,6 +199,18 @@ class EngineTests(unittest.TestCase):
         result = Orchestrator(provider, verifier, config).search(self.task())
         self.assertEqual(result["status"], "model_budget_exhausted")
         self.assertEqual(verifier.batches, [])
+
+    def test_provider_timeouts_reduce_future_agent_parallelism(self):
+        engine = Orchestrator(
+            TimeoutProvider(), FakeBatchVerifier(),
+            SearchConfig(max_rounds=1, proposer_roles={"direct": "d", "automation": "a"},
+                         max_agent_parallelism=2),
+        )
+        result = engine.search(self.task())
+        self.assertEqual(engine._active_agent_parallelism, 1)
+        self.assertTrue(any(
+            event["type"] == "model_parallelism_backoff" for event in result["events"]
+        ))
 
     def test_generated_task_uses_generated_verifier_boundary(self):
         provider = MockProvider([{"candidates": [{"patch": "good"}]}])
