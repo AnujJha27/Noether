@@ -770,6 +770,8 @@ class StructuralV2Tests(unittest.TestCase):
         self.assertIn(generated["ir_sha256"], generated["obligations"][0]["preamble"])
         self.assertIn("allCovered", generated["obligations"][1]["theorem"])
         self.assertNotIn("Fin 6", generated["obligations"][1]["theorem"])
+        self.assertIn("Topology: 6 sites", generated["obligations"][0]["context"])
+        self.assertIn("Scope: structural compatibility only", generated["obligations"][0]["context"])
 
     def test_certificate_distinguishes_confirmed_specification(self):
         ir = self.ir()

@@ -545,6 +545,33 @@ def structural_report(value: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def structural_model_description(value: dict[str, Any]) -> str:
+    """Readable, deterministic context for local proof agents and reports."""
+    validate_structural_ir(value)
+    topology = value["topology"]
+    source = value["source"]
+    translation = value.get("translation", {})
+    lines = [
+        "Artifact-derived model description (not an LLM interpretation):",
+        f"- Source: {source['kind']}; binding hash: {source.get('artifact_sha256', source.get('description_sha256', 'unknown'))}.",
+        f"- Topology: {topology['site_count']} sites and {len(topology['directed_edges'])} directed edges.",
+        f"- Required couplings: {value['requirements']['couplings']}.",
+        f"- Message passing: {value['message_passing']['depth']} consecutive adjacency-fed stage(s): {value['message_passing'].get('provenance_nodes', [])}.",
+        f"- XC output construction: {value['xc']['form']}; supporting graph nodes: {value['xc'].get('provenance_nodes', [])}.",
+        f"- Self-energy construction: {value['operator']['construction']}; supporting graph nodes: {value['operator'].get('provenance_nodes', [])}.",
+    ]
+    if source["kind"] == "torch_export":
+        lines.extend([
+            f"- Declared output roots: {translation.get('roles', {})}.",
+            f"- Adjacency evidence: state {translation.get('topology', {}).get('state_name')!r}; graph nodes {translation.get('topology', {}).get('adjacency_aliases', [])}.",
+            "- Translation validation rechecked these claims against the raw exported inventory.",
+        ])
+    lines.append(
+        "Scope: structural compatibility only; this does not assess numerical outputs, trained weights, convergence, or experiment."
+    )
+    return "\n".join(lines)
+
+
 def _lean_string(value: str) -> str:
     return value.replace("\\", "\\\\").replace('"', '\\"')
 
@@ -631,7 +658,8 @@ end {namespace}
             "ir_sha256": ir_hash,
             "source_sha256": source_hash,
             "context": (
-                "DFT Structural V2 obligation generated deterministically from the common IR. "
+                structural_model_description(value) + "\n\n"
+                + "DFT Structural V2 obligation generated deterministically from the common IR. "
                 "Prove the exact Boolean structural result. Prefer `by decide`, whose result "
                 "is reduced by Lean's kernel for this small finite input."
             ),
