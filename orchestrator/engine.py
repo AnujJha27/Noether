@@ -784,6 +784,15 @@ class Orchestrator:
             if winner:
                 final_status = "verified"
                 break
+            if attempts and all(item.status == "project_not_built" for item in attempts):
+                final_status = "project_not_built"
+                events.append({
+                    "type": "search_blocked_infrastructure",
+                    "round": round_number,
+                    "status": final_status,
+                    "message": "Lean project is not built; refusing futile model repair rounds",
+                })
+                break
         scorecard = agent_scorecard(turns, attempts)
         memory.update_from_scorecard(scorecard)
         reporter_output: dict[str, Any] | None = None

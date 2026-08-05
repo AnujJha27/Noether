@@ -49,6 +49,20 @@ class FakeBatchVerifier:
         return self.verify_batch(**request)
 
 
+class ProjectNotBuiltVerifier(FakeBatchVerifier):
+    def verify_batch(self, **request):
+        self.batches.append(request)
+        return {
+            "status": "no_candidate_verified",
+            "results": [
+                {"id": candidate["id"], "status": "project_not_built",
+                 "diagnostics": "Lean project is not built", "elapsed_ms": 0,
+                 "cached": False}
+                for candidate in request["candidates"]
+            ],
+        }
+
+
 class CapturingProvider(MockProvider):
     def __init__(self, responses):
         super().__init__(responses)
@@ -152,6 +166,18 @@ class EngineTests(unittest.TestCase):
         ]
         self.assertTrue(second_round)
         self.assertIsNotNone(second_round[0]["parent_id"])
+
+    def test_missing_lean_build_stops_repair_rounds(self):
+        verifier = ProjectNotBuiltVerifier()
+        result = Orchestrator(
+            MockProvider([{"candidates": [{"patch": "by decide"}]}]), verifier,
+            SearchConfig(max_rounds=3, proposer_roles={"direct": "d"}),
+        ).search(self.task())
+        self.assertEqual(result["status"], "project_not_built")
+        self.assertEqual(len(verifier.batches), 1)
+        self.assertTrue(any(
+            event["type"] == "search_blocked_infrastructure" for event in result["events"]
+        ))
 
     def test_critic_order_controls_verification_order(self):
         provider = MockProvider([

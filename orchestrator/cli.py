@@ -210,7 +210,7 @@ def main(argv: list[str] | None = None) -> int:
                         encoding="utf-8",
                     )
                     temporary.replace(destination)
-                if response["status"] in {"verified", "paused_stagnant"}:
+                if response["status"] in {"verified", "paused_stagnant", "project_not_built"}:
                     break
                 prior_node_count = node_count
                 resume = response
