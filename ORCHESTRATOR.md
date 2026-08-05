@@ -271,6 +271,24 @@ agents without changing code.
 
 ## Provider routing
 
+### Small local-model mode
+
+For a smaller local model, use `--small-model`. It keeps the theorem and
+relevant context in each proposal prompt and sends the failed proof plus Lean
+diagnostic on repair rounds. The workflow still performs decomposition,
+independent proposal, critic ranking, Lean verification, and diagnostic-driven
+repair. Decomposed subgoals and compact run memory remain visible to proposers;
+only repeated metadata and verbose history are removed:
+
+```bash
+./noether agentic --provider command \
+  --llm-command "/path/to/your-local-adapter --model local-lean-coder" \
+  --small-model < tasks.jsonl
+```
+
+Use the normal mode as an evaluation baseline; do not assume one prompt style
+is best without measuring verified proofs on the same task set.
+
 Agent `model` fields can route to different provider adapters. The default
 provider still comes from `--provider`, while `--provider-routes` supplies
 overrides by model name:

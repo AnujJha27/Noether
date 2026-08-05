@@ -1,0 +1,11 @@
+{
+  "adjacency_convention": "target_source",
+  "output_contracts": [
+    {"index": 0, "role": "xc_energy"},
+    {"index": 1, "role": "learned_self_energy"},
+    {"index": 2, "role": "message_state"}
+  ],
+  "required_couplings": [
+    {"source": 0, "target": 3}
+  ]
+}

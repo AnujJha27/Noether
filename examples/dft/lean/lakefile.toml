@@ -8,13 +8,13 @@ pp.unicode.fun = true
 autoImplicit = false
 relaxedAutoImplicit = false
 weak.linter.mathlibStandardSet = true
-linter.style.header = false
-linter.style.emptyLine = false
-linter.unusedSectionVars = false
-linter.unusedFintypeInType = false
-linter.unusedDecidableInType = false
-linter.unusedSimpArgs = false
-linter.flexible = false
+weak.linter.style.header = false
+weak.linter.style.emptyLine = false
+weak.linter.unusedSectionVars = false
+weak.linter.unusedFintypeInType = false
+weak.linter.unusedDecidableInType = false
+weak.linter.unusedSimpArgs = false
+weak.linter.flexible = false
 maxSynthPendingDepth = 3
 
 [[require]]

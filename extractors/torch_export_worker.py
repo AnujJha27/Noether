@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 
-EXTRACTOR_VERSION = "torch-export-inventory-v1"
+EXTRACTOR_VERSION = "torch-export-inventory-v2"
 
 
 def sha256_file(path: Path) -> str:
@@ -60,6 +60,44 @@ def inventory_node(node: Any) -> dict[str, Any]:
     return result
 
 
+def state_inventory(program: Any) -> dict[str, Any]:
+    graph_inputs: dict[str, list[str]] = {}
+    state_kinds: dict[str, str] = {}
+    signature = getattr(program, "graph_signature", None)
+    for spec in getattr(signature, "input_specs", []):
+        target = getattr(spec, "target", None)
+        argument = getattr(spec, "arg", None)
+        name = getattr(argument, "name", None)
+        if isinstance(target, str) and isinstance(name, str):
+            graph_inputs.setdefault(target, []).append(name)
+            state_kinds[target] = str(getattr(spec, "kind", "unknown"))
+    aliases: dict[int, list[str]] = {}
+    for name, tensor in program.state_dict.items():
+        aliases.setdefault(tensor.untyped_storage().data_ptr(), []).append(str(name))
+    result: dict[str, Any] = {}
+    for name, tensor in program.state_dict.items():
+        detached = tensor.detach().cpu().contiguous()
+        raw = detached.numpy().tobytes()
+        entry = {
+            "shape": [int(item) for item in detached.shape],
+            "dtype": str(detached.dtype),
+            "sha256": hashlib.sha256(raw).hexdigest(),
+            "graph_inputs": graph_inputs.get(name, []),
+            "state_kind": state_kinds.get(name, "unknown"),
+            "aliases": sorted(aliases[tensor.untyped_storage().data_ptr()]),
+        }
+        if detached.dtype in {
+            __import__("torch").bool,
+            __import__("torch").int8,
+            __import__("torch").int16,
+            __import__("torch").int32,
+            __import__("torch").int64,
+        } and detached.numel() <= 4096:
+            entry["structural_values"] = detached.tolist()
+        result[str(name)] = entry
+    return result
+
+
 def extract(path: Path) -> dict[str, Any]:
     # This import and load are deliberately confined to the sandbox worker.
     import torch
@@ -72,7 +110,7 @@ def extract(path: Path) -> dict[str, Any]:
         "extractor_version": EXTRACTOR_VERSION,
         "torch_version": str(torch.__version__),
         "artifact_sha256": sha256_file(path),
-        "inventory": {"nodes": nodes},
+        "inventory": {"nodes": nodes, "state": state_inventory(program)},
         # Inventory is evidence input, not a physics proof. Audited policy analyzers
         # may add facts in a later version; this worker does not infer them by name.
         "facts": {},

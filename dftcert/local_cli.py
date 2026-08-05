@@ -173,6 +173,11 @@ def parser() -> argparse.ArgumentParser:
     )
     agentic.add_argument("orchestrator_args", nargs=argparse.REMAINDER)
 
+    structural = commands.add_parser(
+        "structural", help="forward arguments to the artifact-grounded Structural V2 workflow"
+    )
+    structural.add_argument("structural_args", nargs=argparse.REMAINDER)
+
     demo = commands.add_parser("demo", help="run a bundled Noether workflow demo")
     demo.add_argument(
         "kind",
@@ -542,12 +547,18 @@ def _run_assess(options: argparse.Namespace, policy: Policy) -> int:
 def main(argv: list[str] | None = None) -> int:
     try:
         raw_args = list(argv) if argv is not None else sys.argv[1:]
-        if "agentic" in raw_args:
-            index = raw_args.index("agentic")
+        forwarded = next(
+            (name for name in ("agentic", "structural") if name in raw_args), None
+        )
+        if forwarded:
+            index = raw_args.index(forwarded)
             options = parser().parse_args(raw_args[:index + 1])
-            options.orchestrator_args = raw_args[index + 1:]
+            setattr(options, f"{forwarded}_args", raw_args[index + 1:])
         else:
             options = parser().parse_args(raw_args)
+        if options.command == "structural":
+            from .structural_cli import main as structural_main
+            return structural_main(options.structural_args)
         policy = Policy.load(options.policy)
         if options.command == "status":
             run = LocalRun(options.run_dir)

@@ -7,6 +7,7 @@ model adapter so the agentic harness can be demonstrated reproducibly.
 
 from __future__ import annotations
 
+import ast
 import json
 import sys
 
@@ -63,10 +64,17 @@ def candidate_for(prompt: str) -> dict[str, str]:
 
 def decomposition_for(prompt: str) -> dict[str, object]:
     theorem = ""
-    for line in prompt.splitlines():
+    lines = prompt.splitlines()
+    for index, line in enumerate(lines):
         if line.startswith("Theorem: "):
             theorem = line.removeprefix("Theorem: ")
-            break
+        if line == "Existing subgoals:" and index + 1 < len(lines):
+            existing = ast.literal_eval(lines[index + 1])
+            if isinstance(existing, list) and existing:
+                return {
+                    "subgoals": existing,
+                    "rationale": "reviewed and preserved trusted generated subgoals",
+                }
     return {
         "subgoals": [
             {
@@ -92,6 +100,19 @@ def main() -> int:
         return 0
     if agent == "decomposer":
         print(json.dumps(decomposition_for(prompt)))
+        return 0
+    if agent == "reporter":
+        print(json.dumps({
+            "summary": "The trace records the structural obligation and Lean result.",
+            "next_action": "Use only the verifier status when assembling the certificate.",
+        }))
+        return 0
+    if "Testv2.StructuralV2" in prompt:
+        print(json.dumps({"candidates": [{
+            "patch": "by\n  decide",
+            "rationale": "kernel-reduce the generated finite structural checker",
+            "progress_summary": "generic Structural V2 decision proof",
+        }]}))
         return 0
     print(json.dumps({"candidates": [candidate_for(prompt)]}))
     return 0

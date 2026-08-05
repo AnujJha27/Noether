@@ -28,12 +28,30 @@ def arguments(argv: list[str] | None = None) -> argparse.Namespace:
     )
     parser.add_argument("--verifier", default="./build/proof-search")
     parser.add_argument("--max-rounds", type=int, default=3)
+    parser.add_argument(
+        "--max-epochs", type=int, default=1,
+        help="number of resumable search invocations per task",
+    )
+    parser.add_argument(
+        "--stagnation-epochs", type=int, default=3,
+        help="pause after this many epochs add no search-graph nodes",
+    )
     parser.add_argument("--candidates-per-agent", type=int, default=2)
     parser.add_argument("--max-model-calls", type=int, default=20)
     parser.add_argument("--max-candidates", type=int, default=24)
     parser.add_argument("--agent-parallelism", type=int, default=3)
     parser.add_argument("--verify-parallelism", type=int, default=4)
     parser.add_argument("--frontier-width", type=int, default=6)
+    parser.add_argument(
+        "--small-model",
+        action="store_true",
+        help="use compact proposer prompts while preserving decomposition, criticism, and Lean repair",
+    )
+    parser.add_argument(
+        "--full-process",
+        action="store_true",
+        help="run decomposer, every proposer, critic, verifier, and reporter even for decidable tasks",
+    )
     parser.add_argument("--agents-file", help="structured agent registry JSON")
     parser.add_argument("--roles-file", help="legacy alias for --agents-file")
     parser.add_argument("--journal-dir")
@@ -102,6 +120,8 @@ def provider_routes_from_file(path: str | Path, *, default_timeout_s: int) -> di
 def main(argv: list[str] | None = None) -> int:
     try:
         options = arguments(argv)
+        if options.max_epochs <= 0 or options.stagnation_epochs <= 0:
+            raise ValueError("epoch budgets must be positive")
         provider = provider_from_args(options)
         route_providers = (
             provider_routes_from_file(
@@ -121,6 +141,8 @@ def main(argv: list[str] | None = None) -> int:
             max_parallel_verifications=options.verify_parallelism,
             frontier_width=options.frontier_width,
             agent_registry=registry,
+            compact_prompts=options.small_model,
+            require_full_agent_process=options.full_process,
         )
     except (ValueError, SystemExit) as error:
         if isinstance(error, SystemExit):
@@ -161,17 +183,35 @@ def main(argv: list[str] | None = None) -> int:
                     resume = json.loads(checkpoint.read_text(encoding="utf-8"))
             if run_store and run_state:
                 run_store.record_task_started(run_state, task.id)
-            response = engine.search(task, resume=resume)
-            if options.journal_dir:
-                journal = Path(options.journal_dir)
-                journal.mkdir(parents=True, exist_ok=True)
-                destination = journal / f"{task.id}.json"
-                temporary = destination.with_suffix(".json.tmp")
-                temporary.write_text(
-                    json.dumps(response, indent=2, sort_keys=True) + "\n",
-                    encoding="utf-8",
-                )
-                temporary.replace(destination)
+            prior_node_count = len(resume.get("search_graph", {}).get("nodes", [])) if resume else 0
+            stagnant_epochs = 0
+            for epoch in range(1, options.max_epochs + 1):
+                response = engine.search(task, resume=resume)
+                response["epoch"] = epoch
+                node_count = len(response.get("search_graph", {}).get("nodes", []))
+                stagnant_epochs = stagnant_epochs + 1 if node_count == prior_node_count else 0
+                response["stagnant_epochs"] = stagnant_epochs
+                if response["status"] != "verified" and stagnant_epochs >= options.stagnation_epochs:
+                    response["status"] = "paused_stagnant"
+                    response["events"].append({
+                        "type": "search_paused_stagnant",
+                        "epoch": epoch,
+                        "node_count": node_count,
+                    })
+                if options.journal_dir:
+                    journal = Path(options.journal_dir)
+                    journal.mkdir(parents=True, exist_ok=True)
+                    destination = journal / f"{task.id}.json"
+                    temporary = destination.with_suffix(".json.tmp")
+                    temporary.write_text(
+                        json.dumps(response, indent=2, sort_keys=True) + "\n",
+                        encoding="utf-8",
+                    )
+                    temporary.replace(destination)
+                if response["status"] in {"verified", "paused_stagnant"}:
+                    break
+                prior_node_count = node_count
+                resume = response
             if run_store and run_state:
                 run_store.record_task_result(run_state, response)
             print(json.dumps(response, separators=(",", ":")), flush=True)

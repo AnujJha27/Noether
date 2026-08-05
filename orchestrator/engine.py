@@ -66,6 +66,15 @@ CRITIC_SCHEMA = {
     },
 }
 
+REPORT_SCHEMA = {
+    "type": "object",
+    "required": ["summary"],
+    "properties": {
+        "summary": {"type": "string"},
+        "next_action": {"type": "string"},
+    },
+}
+
 
 @dataclass(slots=True)
 class SearchConfig:
@@ -80,6 +89,8 @@ class SearchConfig:
     proposer_roles: dict[str, str] = field(default_factory=load_roles)
     agent_registry: AgentRegistry | None = None
     enable_decomposition: bool = True
+    compact_prompts: bool = False
+    require_full_agent_process: bool = False
     memory_seed: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -127,6 +138,7 @@ class Orchestrator:
             model="default",
         )
         self.decomposer_spec = self.agent_registry.decomposer_spec()
+        self.reporter_spec = self.agent_registry.reporter_spec()
         self.permissions = permissions or PermissionPolicy()
         self.router = provider_router or ProviderRouter(provider)
         self.frontier_policy = FrontierPolicy(self.config.frontier_width)
@@ -211,6 +223,26 @@ class Orchestrator:
     def _proposal_prompt(self, task: SearchTask, spec: AgentSpec, round_number: int,
                          attempts: list[Attempt], parent: SearchNode | None,
                          frontier: list[SearchNode], memory: RunMemory) -> str:
+        if self.config.compact_prompts:
+            subgoals = json.dumps(task.subgoals, ensure_ascii=False)[:4000]
+            prior_facts = memory.prompt_summary()[:2000]
+            repair = (
+                "Repair this failed complete proof body using the Lean diagnostic.\n"
+                f"Failed proof:\n{parent.candidate.patch}\n"
+                f"Lean diagnostic:\n{parent.diagnostics[-3000:]}\n"
+                if parent else
+                "No proof has been checked yet. Try the shortest proof that fits the theorem.\n"
+            )
+            return (
+                f"Theorem statement:\n{task.theorem}\n\n"
+                f"Relevant context:\n{task.context[:4000] or '(none supplied)'}\n\n"
+                f"Subgoals from decomposition:\n{subgoals}\n\n"
+                f"Useful prior facts:\n{prior_facts}\n\n"
+                f"Strategy: {spec.instructions}\n\n"
+                f"{repair}\n"
+                "Return one complete Lean proof body beginning with `by`. Never use `sorry`, "
+                "`admit`, or unsafe axioms. Return only a JSON object matching the supplied schema."
+            )
         history = [
             {"patch": item.candidate.patch, "status": item.status,
              "diagnostics": item.diagnostics[-3000:]}
@@ -382,13 +414,18 @@ class Orchestrator:
 
     def _rank(self, task: SearchTask, candidates: list[Candidate], round_number: int,
               events: list[dict[str, Any]], turns: list[AgentTurn]) -> list[Candidate]:
-        if len(candidates) < 2:
+        if len(candidates) < 2 and not self.config.require_full_agent_process:
             return candidates
+        candidate_data = (
+            [{"id": candidate.id, "patch": candidate.patch} for candidate in candidates]
+            if self.config.compact_prompts else
+            [candidate.to_json() for candidate in candidates]
+        )
         prompt = (
             f"Theorem: {task.theorem}\nTarget: {task.target}\n"
             "Rank the following proposed Lean patches from most likely to compile to least likely. "
             "Do not rewrite them. Include every candidate ID exactly once.\n" +
-            json.dumps([candidate.to_json() for candidate in candidates], ensure_ascii=False)
+            json.dumps(candidate_data, ensure_ascii=False)
         )
         turn = AgentTurn(
             id=f"{task.id}-turn-r{round_number}-critic",
@@ -436,7 +473,7 @@ class Orchestrator:
         turns: list[AgentTurn],
         memory: RunMemory,
     ) -> SearchTask:
-        if task.subgoals or not self.config.enable_decomposition or self.decomposer_spec is None:
+        if not self.config.enable_decomposition or self.decomposer_spec is None:
             return task
         agent = self.decomposer_spec
         turn = AgentTurn(
@@ -466,6 +503,20 @@ class Orchestrator:
             rebuilt = task.to_json()
             rebuilt["subgoals"] = raw_subgoals
             decomposed = SearchTask.from_json(rebuilt)
+            if task.subgoals and self.config.require_full_agent_process:
+                trusted = {
+                    item["id"]: (item["theorem"], item["depends_on"])
+                    for item in task.subgoals
+                }
+                reviewed = {
+                    item["id"]: (item["theorem"], item["depends_on"])
+                    for item in decomposed.subgoals
+                }
+                if reviewed != trusted:
+                    raise ValueError(
+                        "decomposer may review but not rewrite trusted structural subgoals"
+                    )
+                decomposed = task
             turn.output_summary = f"created {len(decomposed.subgoals)} subgoal(s)"
             turn.candidate_ids = [str(item.get("id", "")) for item in raw_subgoals if isinstance(item, dict)]
             turns.append(turn)
@@ -721,6 +772,26 @@ class Orchestrator:
                 break
         scorecard = agent_scorecard(turns, attempts)
         memory.update_from_scorecard(scorecard)
+        reporter_output: dict[str, Any] | None = None
+        if self.config.require_full_agent_process and self.reporter_spec is not None:
+            try:
+                self.permissions.require(self.reporter_spec, "trace_read")
+                reporter_output = self._complete_agent(
+                    self.reporter_spec,
+                    system=(
+                        "Summarize the recorded proof-search trace without changing or "
+                        "inventing verification status."
+                    ),
+                    prompt=(
+                        f"Task: {task.id}\nStatus: {final_status}\n"
+                        f"Rounds: {max((item.candidate.round for item in attempts), default=0)}\n"
+                        f"Attempts: {json.dumps([item.to_json() for item in attempts[-8:]], ensure_ascii=False)}"
+                    ),
+                    schema=REPORT_SCHEMA,
+                )
+                events.append({"type": "reporter_completed", "output": reporter_output})
+            except RuntimeError as error:
+                events.append({"type": "reporter_failed", "message": str(error)})
         self._progress({
             "type": "search_completed",
             "task_id": task.id,
@@ -757,4 +828,6 @@ class Orchestrator:
         }
         if winner:
             output["winner"] = winner.to_json()
+        if reporter_output is not None:
+            output["reporter"] = reporter_output
         return output

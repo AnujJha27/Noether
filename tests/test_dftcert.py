@@ -24,9 +24,19 @@ from dftcert.pt2 import inspect_pt2, pending_manifest
 from dftcert.report import sanity_report
 from dftcert.sandbox import BubblewrapExtractor, SandboxUnavailable
 from dftcert.security import AuditLog, sign_attestation, verify_attestation
+from dftcert.structural_v2 import (
+    assemble_structural_certificate,
+    assess_structural_ir,
+    confirmed_description_ir,
+    generate_structural_obligations,
+    structural_ir_from_inventory,
+    structural_failure_witnesses,
+    validate_translation,
+)
 from dftcert.pipeline import LocalPipeline, LocalPipelineConfig, LocalRun
 from dftcert.tui import assessment_lines, build_artifact_report, build_hypothesis_report, build_run_inspector, render_plain
 from extractors.torch_export_worker import inventory_node
+from examples.dft.evaluate_structural_v2 import score as score_structural_v2
 from orchestrator.providers import MockProvider
 
 
@@ -669,6 +679,119 @@ class CertificateTests(unittest.TestCase):
             self.assertEqual(len(result["project"]["fingerprint"]), 64)
             self.assertEqual(result["certificate"]["declaration"],
                              "DFTCert.Example.certificate")
+
+
+class StructuralV2Tests(unittest.TestCase):
+    def inventory(self):
+        ref = lambda name: {"node": name}
+        return {
+            "nodes": [
+                {"name": "b_adjacency", "op": "placeholder", "target": "b_adjacency", "args": [], "kwargs": {}},
+                {"name": "p_base", "op": "placeholder", "target": "p_base", "args": [], "kwargs": {}},
+                {"name": "density", "op": "placeholder", "target": "density", "args": [], "kwargs": {}},
+                {"name": "matmul", "op": "call_function", "target": "aten.matmul.default", "args": [ref("b_adjacency"), ref("density")], "kwargs": {}},
+                {"name": "matmul_1", "op": "call_function", "target": "aten.matmul.default", "args": [ref("b_adjacency"), ref("matmul")], "kwargs": {}},
+                {"name": "matmul_2", "op": "call_function", "target": "aten.matmul.default", "args": [ref("b_adjacency"), ref("matmul_1")], "kwargs": {}},
+                {"name": "relu", "op": "call_function", "target": "aten.relu.default", "args": [ref("density")], "kwargs": {}},
+                {"name": "numpy_t", "op": "call_function", "target": "aten.numpy_T.default", "args": [ref("p_base")], "kwargs": {}},
+                {"name": "add", "op": "call_function", "target": "aten.add.Tensor", "args": [ref("p_base"), ref("numpy_t")], "kwargs": {}},
+                {"name": "output", "op": "output", "target": "output", "args": [[ref("relu"), ref("add"), ref("matmul_2")]], "kwargs": {}},
+            ],
+            "state": {"adjacency": {
+                "structural_values": [[False, True, False, False], [False, False, True, False], [False, False, False, True], [False, False, False, False]],
+                "graph_inputs": ["b_adjacency"], "shape": [4, 4], "dtype": "torch.bool", "sha256": "a",
+            }},
+        }
+
+    def constraints(self):
+        return {
+            "adjacency_state_name": "adjacency", "adjacency_convention": "source_target",
+            "output_contracts": [
+                {"index": 0, "role": "xc_energy"},
+                {"index": 1, "role": "learned_self_energy"},
+                {"index": 2, "role": "message_state"},
+            ],
+            "required_couplings": [{"source": 0, "target": 3}],
+        }
+
+    def test_translation_validation_rejects_ir_claim_tampering(self):
+        inventory = self.inventory()
+        ir = structural_ir_from_inventory(
+            inventory=inventory, artifact_sha256="artifact", extractor_version="test",
+            input_constraints=self.constraints(),
+        )
+        self.assertEqual(ir["translation_validation"]["status"], "translation_validated")
+        ir["message_passing"]["depth"] = 2
+        with self.assertRaises(ManifestError):
+            validate_translation(inventory=inventory, value=ir, input_constraints=self.constraints())
+
+    def ir(self, *, depth=3, xc="hinge", operator="symmetrized"):
+        return confirmed_description_ir(
+            description="Reviewed six-site structural model",
+            topology={
+                "site_count": 6,
+                "directed_edges": [
+                    [0, 1], [1, 2], [2, 3], [3, 4], [4, 5], [5, 0],
+                    [1, 0], [2, 1], [3, 2], [4, 3], [5, 4], [0, 5],
+                ],
+                "provenance_nodes": [],
+            },
+            message_passing={"depth": depth, "provenance_nodes": []},
+            xc={"form": xc, "provenance_nodes": []},
+            operator={"construction": operator, "provenance_nodes": []},
+            requirements={"couplings": [{"source": 0, "target": 3}]},
+        )
+
+    def test_structural_assessment_and_failure_witnesses(self):
+        self.assertEqual(assess_structural_ir(self.ir())["status"], "structurally_certifiable")
+        shallow = self.ir(depth=2)
+        self.assertEqual(
+            assess_structural_ir(shallow)["status"], "structural_requirements_not_met"
+        )
+        witness = structural_failure_witnesses(shallow)
+        self.assertEqual(witness[0]["kind"], "uncovered_coupling")
+        self.assertEqual((witness[0]["source"], witness[0]["target"]), (0, 3))
+
+    def test_generated_tasks_are_ir_bound_and_not_fixed_templates(self):
+        generated = generate_structural_obligations(self.ir())
+        self.assertEqual(len(generated["obligations"]), 3)
+        self.assertIn(generated["ir_sha256"], generated["obligations"][0]["preamble"])
+        self.assertIn("allCovered", generated["obligations"][1]["theorem"])
+        self.assertNotIn("Fin 6", generated["obligations"][1]["theorem"])
+
+    def test_certificate_distinguishes_confirmed_specification(self):
+        ir = self.ir()
+        generated = generate_structural_obligations(ir)
+        results = [
+            {"id": task["id"], "status": "verified", "winner": {"patch": "by decide"}}
+            for task in generated["obligations"]
+        ]
+        source, report = assemble_structural_certificate(ir, results)
+        self.assertEqual(report["certificate_kind"], "confirmed_specification")
+        self.assertIn(generated["source_sha256"], source)
+        self.assertIn(generated["ir_sha256"], source)
+
+    def test_certificate_rejects_placeholder_proofs(self):
+        ir = self.ir()
+        generated = generate_structural_obligations(ir)
+        results = [
+            {"id": task["id"], "status": "verified", "winner": {"patch": "by sorry"}}
+            for task in generated["obligations"]
+        ]
+        with self.assertRaises(ManifestError):
+            assemble_structural_certificate(ir, results)
+
+    def test_evaluation_separates_answers_from_artifact_evidence(self):
+        expected = {"demo": {"self_adjoint": True}}
+        direct = [{"case": "demo", "checks": {"self_adjoint": True}}]
+        harness = [{
+            "case": "demo", "checks": {"self_adjoint": True},
+            "artifact_sha256": "a", "ir_sha256": "b",
+            "certificate_status": "verified",
+        }]
+        self.assertEqual(score_structural_v2(expected, direct)["exact_case_accuracy"], 1)
+        self.assertEqual(score_structural_v2(expected, direct)["artifact_binding_rate"], 0)
+        self.assertEqual(score_structural_v2(expected, harness)["lean_verified_rate"], 1)
 
 
 class ContextRegistryTests(unittest.TestCase):

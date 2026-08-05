@@ -1,0 +1,36 @@
+{
+  "cases": [
+    {
+      "case": "certified-ring",
+      "expected_checks": {
+        "xc_discontinuity_compatible": true,
+        "spatial_nonlocality_compatible": true,
+        "self_adjoint": true
+      }
+    },
+    {
+      "case": "too-shallow-ring",
+      "expected_checks": {
+        "xc_discontinuity_compatible": true,
+        "spatial_nonlocality_compatible": false,
+        "self_adjoint": true
+      }
+    },
+    {
+      "case": "unconstrained-operator",
+      "expected_checks": {
+        "xc_discontinuity_compatible": true,
+        "spatial_nonlocality_compatible": true,
+        "self_adjoint": false
+      }
+    },
+    {
+      "case": "smooth-xc",
+      "expected_checks": {
+        "xc_discontinuity_compatible": false,
+        "spatial_nonlocality_compatible": true,
+        "self_adjoint": true
+      }
+    }
+  ]
+}

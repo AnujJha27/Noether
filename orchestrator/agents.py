@@ -136,6 +136,12 @@ class AgentRegistry:
                 return spec
         return None
 
+    def reporter_spec(self) -> AgentSpec | None:
+        for spec in self.agents.values():
+            if spec.kind == "reporter":
+                return spec
+        return None
+
     def to_json(self) -> dict[str, Any]:
         return {name: spec.to_json() for name, spec in self.agents.items()}
 

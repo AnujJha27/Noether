@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+import contextlib
+import io
 import json
+import os
 import pathlib
 import sys
 import tempfile
@@ -8,7 +11,7 @@ import unittest
 
 from dftcert.tui import build_search_inspector, render_plain
 from orchestrator.agents import AgentRegistry, AgentSpec
-from orchestrator.cli import provider_routes_from_file
+from orchestrator.cli import main as orchestrator_main, provider_routes_from_file
 from orchestrator.engine import Orchestrator, SearchConfig
 from orchestrator.models import SearchTask
 from orchestrator.permissions import PermissionPolicy
@@ -160,6 +163,30 @@ class EngineTests(unittest.TestCase):
         self.assertEqual(verifier.batches[0]["candidates"][0]["patch"], "good")
         self.assertTrue(any(event["type"] == "critic" for event in result["events"]))
 
+    def test_small_model_mode_uses_compact_prompt_and_keeps_critic(self):
+        provider = CapturingProvider([
+            {"candidates": [{"patch": "bad", "rationale": "first"}]},
+            {"candidates": [{"patch": "good", "rationale": "second"}]},
+            {
+                "ordered_ids": ["search-r1-automation-1", "search-r1-direct-1"],
+                "feedback": "prefer the second candidate",
+            },
+        ])
+        config = SearchConfig(
+            max_rounds=1,
+            proposer_roles={"direct": "short proof", "automation": "try simp"},
+            max_agent_parallelism=1,
+            compact_prompts=True,
+        )
+        result = Orchestrator(provider, FakeBatchVerifier(), config).search(self.task())
+        self.assertEqual(result["status"], "verified")
+        self.assertEqual(len(result["model_call_records"]), 3)
+        self.assertTrue(any(event["type"] == "critic" for event in result["events"]))
+        self.assertIn("Theorem statement:", provider.prompts[0]["prompt"])
+        self.assertNotIn("Run memory:", provider.prompts[0]["prompt"])
+        self.assertIn("Subgoals from decomposition:", provider.prompts[0]["prompt"])
+        self.assertIn("Useful prior facts:", provider.prompts[0]["prompt"])
+
     def test_rejects_placeholder_candidates(self):
         provider = MockProvider([{"candidates": [{"patch": "by sorry"}]}])
         verifier = FakeBatchVerifier()
@@ -182,6 +209,41 @@ class EngineTests(unittest.TestCase):
         ).search(task)
         self.assertEqual(result["status"], "verified")
         self.assertEqual(verifier.generated_batches[0]["preamble"], task.preamble)
+
+    def test_full_process_keeps_every_agent_stage_for_structural_tasks(self):
+        subgoal = {"id": "evaluate", "theorem": "theorem generated : True", "depends_on": []}
+        registry = AgentRegistry({
+            "direct": AgentSpec(name="direct", kind="proposer", instructions="prove",
+                                tools=("candidate_submit", "lean_diagnostics"), explicit_tools=True),
+            "critic": AgentSpec(name="critic", kind="critic", instructions="rank",
+                                tools=("candidate_rank",), explicit_tools=True),
+            "decomposer": AgentSpec(name="decomposer", kind="decomposer", instructions="review",
+                                    tools=("task_decompose",), explicit_tools=True),
+            "reporter": AgentSpec(name="reporter", kind="reporter", instructions="report",
+                                  tools=("trace_read",), explicit_tools=True),
+        })
+        provider = MockProvider([
+            {"subgoals": [subgoal], "rationale": "preserve trusted task"},
+            {"candidates": [{"patch": "good"}]},
+            {"ordered_ids": ["generated-r1-direct-1"]},
+            {"summary": "verified trace only"},
+        ])
+        task = SearchTask.from_json({
+            "id": "generated", "verification_mode": "generated_obligation",
+            "preamble": "def trustedInput := 1", "theorem": "theorem generated : True",
+            "module": "A", "project": "sample", "subgoals": [subgoal],
+        })
+        result = Orchestrator(
+            provider, FakeBatchVerifier(),
+            SearchConfig(max_rounds=1, max_model_calls=4, agent_registry=registry,
+                         require_full_agent_process=True),
+        ).search(task)
+        self.assertEqual(result["status"], "verified")
+        self.assertEqual(
+            [record["kind"] for record in result["model_call_records"]],
+            ["decomposer", "proposer", "critic", "reporter"],
+        )
+        self.assertEqual(result["reporter"]["summary"], "verified trace only")
 
     def test_search_graph_can_resume_and_handoff_to_new_agent_round(self):
         first = Orchestrator(
@@ -357,6 +419,36 @@ class EngineTests(unittest.TestCase):
             loaded = store.load()
             self.assertEqual(loaded.status, "completed")
             self.assertEqual(loaded.completed[0]["task_id"], "search")
+
+    def test_cli_pauses_and_checkpoints_after_stagnant_epoch(self):
+        task = json.dumps(self.task().to_json()) + "\n"
+        with tempfile.TemporaryDirectory() as directory:
+            journal = pathlib.Path(directory) / "journal"
+            old_stdin = sys.stdin
+            old_bad = os.environ.get("FAKE_LLM_BAD")
+            sys.stdin = io.StringIO(task)
+            os.environ["FAKE_LLM_BAD"] = "1"
+            output = io.StringIO()
+            try:
+                with contextlib.redirect_stdout(output):
+                    status = orchestrator_main([
+                        "--provider", "command",
+                        "--llm-command", f"{sys.executable} {ROOT / 'tests/fake_llm.py'}",
+                        "--verifier", str(ROOT / "tests/fake_verifier.py"),
+                        "--max-rounds", "1", "--max-epochs", "2",
+                        "--stagnation-epochs", "1", "--journal-dir", str(journal),
+                    ])
+            finally:
+                sys.stdin = old_stdin
+                if old_bad is None:
+                    os.environ.pop("FAKE_LLM_BAD", None)
+                else:
+                    os.environ["FAKE_LLM_BAD"] = old_bad
+            self.assertEqual(status, 0)
+            result = json.loads(output.getvalue().splitlines()[-1])
+            self.assertEqual(result["status"], "paused_stagnant")
+            saved = json.loads((journal / "search.json").read_text())
+            self.assertEqual(saved["status"], "paused_stagnant")
 
     def test_terminal_inspector_renders_search_artifacts(self):
         with tempfile.TemporaryDirectory() as directory:
