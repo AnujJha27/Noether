@@ -9,7 +9,7 @@ import sys
 import tempfile
 import unittest
 
-from dftcert.tui import build_search_inspector, render_plain
+from dftcert.tui import build_search_inspector, render_plain, search_result_lines
 from orchestrator.agents import AgentRegistry, AgentSpec
 from orchestrator.cli import main as orchestrator_main, provider_routes_from_file
 from orchestrator.engine import Orchestrator, SearchConfig
@@ -612,6 +612,22 @@ class EngineTests(unittest.TestCase):
             rendered = render_plain(build_search_inspector(path), width=88)
             self.assertIn("infrastructure issue", rendered)
             self.assertIn("Lean project is not built", rendered)
+
+    def test_search_result_wraps_full_json_details_without_ellipsis(self):
+        lines = search_result_lines({
+            "id": "search", "status": "exhausted", "model_calls": 0,
+            "unique_candidates": 0, "rounds_used": 0,
+            "supervisor_decisions": [{
+                "round": 1, "action": "continue", "reason": "long assignment",
+                "assignments": {"automation": "candidate-with-a-long-identifier"},
+            }],
+            "agent_scorecard": {"automation": {"candidate_count": 123456789}},
+        }, 24)
+        rendered = "\n".join(text for text, _ in lines)
+        unwrapped = "".join(text.strip() for text, _ in lines)
+        self.assertNotIn("...", rendered)
+        self.assertIn("candidate-with-a-long-identifier", unwrapped)
+        self.assertIn("123456789", unwrapped)
 
 
 if __name__ == "__main__":

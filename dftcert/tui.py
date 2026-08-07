@@ -229,8 +229,7 @@ def report_lines(data: dict[str, Any], width: int) -> list[tuple[str, str]]:
 
 def _short_json(value: Any, width: int) -> str:
     text = json.dumps(value, sort_keys=True) if not isinstance(value, str) else value
-    text = " ".join(text.split())
-    return text if len(text) <= width else text[:max(0, width - 3)] + "..."
+    return " ".join(text.split())
 
 
 def event_summary(event: dict[str, Any]) -> tuple[str, str]:
@@ -349,7 +348,11 @@ def search_result_lines(data: dict[str, Any], width: int) -> list[tuple[str, str
                 f"■ r{decision.get('round')} {decision.get('action')} — {decision.get('reason')}",
                 "warn" if decision.get("action") == "stop" else "good",
             ))
-            lines.append((f"  assignments: {_short_json(decision.get('assignments', {}), width - 2)}", "muted"))
+            for line in wrap_lines(
+                f"assignments: {_short_json(decision.get('assignments', {}), width - 2)}",
+                width - 2, indent="  ",
+            ):
+                lines.append((line, "muted"))
     lines.append(("", "muted"))
     lines.append(("AGENT TURNS", "title"))
     for turn in data.get("agent_turns", []):
@@ -392,7 +395,10 @@ def search_result_lines(data: dict[str, Any], width: int) -> list[tuple[str, str
         lines.append(("", "muted"))
         lines.append(("SCORECARD", "title"))
         for agent, stats in scorecard.items():
-            lines.append((f"■ {agent}: {_short_json(stats, width - len(agent) - 4)}", "muted"))
+            for line in wrap_lines(
+                f"■ {agent}: {_short_json(stats, width - len(agent) - 4)}", width
+            ):
+                lines.append((line, "muted"))
     attempts = data.get("attempts", [])
     if attempts:
         lines.append(("", "muted"))
