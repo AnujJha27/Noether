@@ -1,14 +1,19 @@
 # Noether
 
-Noether is a local research harness for turning bounded architecture claims
-into Lean-checked evidence. LLMs may propose proof patches; Lean decides
-whether they verify.
+> Turn a structural belief about a model into a Lean-checked certificate.
 
-It has three practical pieces:
+You have an exported model and believe it has a property: information can reach
+the sites that need to interact; an XC construction has the required hinge; an
+operator is self-adjoint by construction. A test can sample outputs. Noether
+turns the architectural claim into a theorem about the exact artifact.
 
-- a C++ Lean-verification service with isolated, bounded workers;
-- a Python agentic runner for proposing, ranking, and repairing proof patches;
-- an artifact-grounded DFT Structural V2 workflow for exported PyTorch models.
+```text
+model.pt2 → artifact-grounded structural IR → generated Lean obligations → certificate
+```
+
+A certificate is bound to the exported artifact and IR hashes. Lean accepts or
+rejects the generated theorem; language models may suggest a proof, but never
+decide that it is valid.
 
 ## Quick start
 
@@ -31,7 +36,7 @@ Start a verifier service when driving it directly:
 
 ## Common workflows
 
-Run proof search over generated JSONL tasks:
+Run an existing proof-search task set:
 
 ```bash
 ./noether agentic --provider mock --run-dir build/runs/demo < tasks.jsonl
@@ -39,17 +44,16 @@ Run proof search over generated JSONL tasks:
 ./noether review --run-dir build/runs/demo
 ```
 
-The operational TUI shows the live run. `review` is the separate read-only
-view for accepted Lean proof patches and verifier diagnostics.
+`tui` shows the live run. `review` is the separate read-only view for accepted
+Lean proof patches and verifier diagnostics.
 
-For the full Structural V2 demo array, use the copy-paste commands in
+For seven artifact-backed pass/fail examples, use
 [Structural V2 demos](STRUCTURAL_V2_DEMOS.md).
 
 ## Trust boundary
 
-Noether certifies structural compatibility only. It does not certify numerical
-accuracy, convergence, trained weights, or experimental agreement. PT2-derived
-reports bind claims to the artifact and generated IR hashes; Lean checks the
+Noether certifies structural compatibility, not numerical accuracy,
+convergence, trained weights, or experimental agreement. Lean checks the
 generated theorem, not the PT2 binary itself.
 
 ## Documentation
