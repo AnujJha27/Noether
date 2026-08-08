@@ -424,6 +424,50 @@ def search_result_lines(data: dict[str, Any], width: int) -> list[tuple[str, str
     return lines
 
 
+def proof_review_entries(data: dict[str, Any]) -> list[dict[str, Any]]:
+    entries: list[dict[str, Any]] = []
+    for artifact in data.get("artifacts", []):
+        if not isinstance(artifact, dict):
+            continue
+        task = artifact.get("task", {})
+        winner = artifact.get("winner", {})
+        if not isinstance(task, dict):
+            task = {}
+        if not isinstance(winner, dict):
+            winner = {}
+        attempts = artifact.get("attempts", [])
+        verified = next(
+            (item for item in attempts if isinstance(item, dict) and item.get("status") == "verified"),
+            {},
+        )
+        if not isinstance(verified, dict):
+            verified = {}
+        entries.append({
+            "id": artifact.get("id", "unknown"),
+            "status": artifact.get("status", "unknown"),
+            "theorem": task.get("theorem", ""),
+            "module": task.get("module", ""),
+            "project": task.get("project", ""),
+            "proof": winner.get("patch") or verified.get("patch") or "(no accepted proof)",
+            "diagnostics": verified.get("diagnostics", "(not verified)"),
+        })
+    return entries
+
+
+def proof_review_lines(data: dict[str, Any], width: int) -> list[tuple[str, str]]:
+    lines: list[tuple[str, str]] = [("PROOF REVIEW", "title")]
+    for entry in proof_review_entries(data):
+        status = str(entry["status"])
+        lines.append((f"■ {entry['id']} [{label(status)}]", status_color(status)))
+        for heading, value in (("theorem", entry["theorem"]), ("proof", entry["proof"]),
+                               ("verification", entry["diagnostics"])):
+            lines.append((heading.upper(), "gap"))
+            for line in wrap_lines(str(value), width - 2, indent="  "):
+                lines.append((line, "muted"))
+        lines.append(("", "muted"))
+    return lines or [("No proof artifacts yet.", "muted")]
+
+
 def assessment_lines(data: dict[str, Any], width: int) -> list[tuple[str, str]]:
     lines: list[tuple[str, str]] = []
     verdict = str(data.get("verdict", "inconclusive"))
@@ -745,6 +789,8 @@ def render_plain(data: dict[str, Any], *, coverage: bool = False,
         source = search_result_lines(data["result"], width)
     elif data.get("inspector_kind") == "run":
         source = run_inspector_lines(data, width)
+    elif data.get("inspector_kind") == "proof_review":
+        source = proof_review_lines(data, width)
     else:
         source = coverage_lines(data, width) if coverage else report_lines(data, width)
     return "\n".join(text for text, _ in source)
@@ -804,10 +850,10 @@ class TuiApp:
                 self._next_focus()
                 self.message = f"{self.focus} pane focused · arrows scroll · q/Esc quit"
                 continue
-            if key in ("[", curses.KEY_LEFT) and self.mode == "inspector":
+            if key in ("[", curses.KEY_LEFT) and self.mode in {"inspector", "proof_review"}:
                 self._cycle_artifact(-1)
                 continue
-            if key in ("]", curses.KEY_RIGHT) and self.mode == "inspector":
+            if key in ("]", curses.KEY_RIGHT) and self.mode in {"inspector", "proof_review"}:
                 self._cycle_artifact(1)
                 continue
             if key == "\x15":  # Ctrl-U
@@ -852,12 +898,18 @@ class TuiApp:
         if self.refresh_path is None:
             return
         try:
-            self.data = build_run_inspector(self.refresh_path)
-            self.message = "live run inspector · Tab focus · mouse/arrows scroll · q/Esc quit"
+            self.data = (
+                build_proof_review(self.refresh_path)
+                if self.mode == "proof_review" else build_run_inspector(self.refresh_path)
+            )
+            self.message = "proof review · [] proof · arrows scroll · q/Esc quit" if self.mode == "proof_review" else "live run inspector · Tab focus · mouse/arrows scroll · q/Esc quit"
         except Exception as error:
             self.message = f"{type(error).__name__}: {error}"
 
     def _scroll_focused(self, delta: int) -> None:
+        if self.mode == "proof_review":
+            self.scroll = max(0, self.scroll + delta)
+            return
         if self.mode == "inspector":
             if self.focus in {"left", "past"}:
                 self.left_scroll = max(0, self.left_scroll + delta)
@@ -893,9 +945,11 @@ class TuiApp:
         self.artifact_index = (current + delta) % len(artifacts)
         self.left_scroll = 0
         self.focus = "past"
+        self.scroll = 0
         self.message = (
-                f"past task {self.artifact_index + 1}/{len(artifacts)} selected · "
-            "[] cycle · Tab focus · mouse/arrows scroll · q/Esc quit"
+            f"proof {self.artifact_index + 1}/{len(artifacts)} selected · [] cycle · arrows scroll · q/Esc quit"
+            if self.mode == "proof_review" else
+            f"past task {self.artifact_index + 1}/{len(artifacts)} selected · [] cycle · Tab focus · mouse/arrows scroll · q/Esc quit"
         )
 
     def _selected_artifact_index(self, count: int) -> int:
@@ -1174,6 +1228,9 @@ class TuiApp:
         ):
             self._draw_run_dashboard(screen, height, width)
             return
+        if self.mode == "proof_review":
+            self._draw_proof_review(screen, height, width)
+            return
         left_w = max(34, min(58, width // 3))
         right_w = width - left_w - 3
         screen.addstr(0, 2, "† PROOF VIBE", self._attr("title") | curses.A_BOLD)
@@ -1225,6 +1282,38 @@ class TuiApp:
             screen.addstr(4 + row, left_w + 4, text[:right_w - 4], self._attr(color))
         if self.scroll:
             screen.addstr(height - 4, left_w + 4, f"↑ scrolled {self.scroll}", self._attr("warn"))
+        screen.refresh()
+
+    def _draw_proof_review(self, screen: Any, height: int, width: int) -> None:
+        entries = proof_review_entries(self.data)
+        selected = self._selected_artifact_index(len(entries))
+        entry = entries[selected] if entries else None
+        left_w = max(30, min(48, width // 3))
+        right_x = left_w + 2
+        right_w = width - right_x - 1
+        screen.addstr(0, 2, "† PROOF REVIEW", self._attr("title") | curses.A_BOLD)
+        screen.addstr(0, 20, "[] proof · arrows scroll · q/Esc quit"[:width - 22], self._attr("muted"))
+        self._box(screen, 2, 1, height - 3, left_w, "proofs")
+        proof_list: list[tuple[str, str]] = []
+        for index, item in enumerate(entries):
+            prefix = "› " if index == selected else "  "
+            for line in wrap_lines(f"{prefix}{item['id']} [{label(item['status'])}]", left_w - 4):
+                proof_list.append((line, status_color(str(item["status"]))))
+        self._draw_lines(screen, 4, 3, left_w - 4, height - 7, proof_list)
+        self._box(screen, 2, right_x, height - 3, right_w, "accepted Lean proof")
+        if entry is None:
+            self._draw_wrapped(screen, 4, right_x + 2, right_w - 4, height - 7,
+                               "No proof artifacts yet.", self._attr("muted"), self.scroll)
+        else:
+            details = (
+                f"THEOREM\n{entry['theorem']}\n\n"
+                f"PROJECT  {entry['project']}\nMODULE   {entry['module']}\n"
+                f"STATUS   {label(entry['status'])}\n\n"
+                f"PROOF\n{entry['proof']}\n\n"
+                f"VERIFIER\n{entry['diagnostics']}"
+            )
+            self._draw_wrapped(screen, 4, right_x + 2, right_w - 4, height - 7,
+                               details, self._attr("muted"), self.scroll)
         screen.refresh()
 
     def _draw_run_dashboard(self, screen: Any, height: int, width: int) -> None:
@@ -1310,6 +1399,7 @@ def arguments(argv: list[str] | None = None) -> argparse.Namespace:
     parser.add_argument("--certificate-report")
     parser.add_argument("--search-result")
     parser.add_argument("--run-dir")
+    parser.add_argument("--review-run-dir")
     parser.add_argument("--coverage", action="store_true")
     parser.add_argument(
         "--once", action="store_true",
@@ -1411,6 +1501,11 @@ def build_run_inspector(path: str | Path) -> dict[str, Any]:
     return {"inspector_kind": "run", "state": state, "artifacts": artifacts, "events": events}
 
 
+def build_proof_review(path: str | Path) -> dict[str, Any]:
+    inspected = build_run_inspector(path)
+    return {"inspector_kind": "proof_review", "artifacts": inspected.get("artifacts", [])}
+
+
 def main(argv: list[str] | None = None) -> int:
     options = arguments(argv)
     policy = Policy.load(options.policy)
@@ -1432,6 +1527,12 @@ def main(argv: list[str] | None = None) -> int:
             print(render_plain(data, width=options.width))
             return 0
         mode = "inspector"
+    elif options.review_run_dir:
+        data = build_proof_review(options.review_run_dir)
+        if options.once:
+            print(render_plain(data, width=options.width))
+            return 0
+        mode = "proof_review"
     elif options.manifest:
         data = build_artifact_report(
             policy=policy,
@@ -1457,7 +1558,7 @@ def main(argv: list[str] | None = None) -> int:
         hypothesis=options.hypothesis,
         mode=mode,
         data=data,
-        refresh_path=options.run_dir if options.run_dir and not options.once else None,
+        refresh_path=(options.review_run_dir or options.run_dir) if not options.once else None,
     ).run()
     return 0
 

@@ -9,7 +9,7 @@ import sys
 import tempfile
 import unittest
 
-from dftcert.tui import build_search_inspector, render_plain, search_result_lines
+from dftcert.tui import build_proof_review, build_search_inspector, render_plain, search_result_lines
 from orchestrator.agents import AgentRegistry, AgentSpec
 from orchestrator.cli import main as orchestrator_main, provider_routes_from_file
 from orchestrator.engine import Orchestrator, SearchConfig
@@ -628,6 +628,21 @@ class EngineTests(unittest.TestCase):
         self.assertNotIn("...", rendered)
         self.assertIn("candidate-with-a-long-identifier", unwrapped)
         self.assertIn("123456789", unwrapped)
+
+    def test_proof_review_reads_the_accepted_proof_from_run_artifacts(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = pathlib.Path(directory)
+            (root / "artifacts").mkdir()
+            (root / "state.json").write_text('{"status":"completed"}', encoding="utf-8")
+            (root / "artifacts" / "proof.json").write_text(json.dumps({
+                "id": "proof", "status": "verified",
+                "task": {"theorem": "theorem proof : True", "module": "A", "project": "P"},
+                "winner": {"patch": "by trivial"},
+                "attempts": [{"status": "verified", "diagnostics": "checked"}],
+            }), encoding="utf-8")
+            rendered = render_plain(build_proof_review(root), width=80)
+        self.assertIn("by trivial", rendered)
+        self.assertIn("checked", rendered)
 
 
 if __name__ == "__main__":

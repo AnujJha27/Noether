@@ -254,6 +254,11 @@ def parser() -> argparse.ArgumentParser:
     tui.add_argument("--coverage", action="store_true")
     tui.add_argument("--once", action="store_true")
     tui.add_argument("--width", type=int, default=100)
+
+    review = commands.add_parser("review", help="review accepted Lean proofs from an agentic run")
+    review.add_argument("--run-dir", required=True)
+    review.add_argument("--once", action="store_true")
+    review.add_argument("--width", type=int, default=100)
     return root
 
 
@@ -592,6 +597,13 @@ def main(argv: list[str] | None = None) -> int:
             if options.once:
                 args.append("--once")
             args.extend(["--width", str(options.width)])
+            return tui_main(args)
+        elif options.command == "review":
+            from .tui import main as tui_main
+            args = ["--policy", options.policy, "--review-run-dir", options.run_dir,
+                    "--width", str(options.width)]
+            if options.once:
+                args.append("--once")
             return tui_main(args)
         elif options.command == "replay":
             from orchestrator.replay import replay_path
