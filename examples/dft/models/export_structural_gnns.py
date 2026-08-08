@@ -6,10 +6,13 @@ from pathlib import Path
 import torch
 
 from structural_gnns import (
+    AllFailuresRingGNN,
     CertifiedRingGNN,
+    IdentityOperatorRingGNN,
     SmoothXCGNN,
     TooShallowRingGNN,
     UnconstrainedOperatorGNN,
+    ZeroOperatorRingGNN,
 )
 
 
@@ -18,6 +21,9 @@ MODELS = {
     "too-shallow-ring": TooShallowRingGNN,
     "unconstrained-operator": UnconstrainedOperatorGNN,
     "smooth-xc": SmoothXCGNN,
+    "identity-operator-ring": IdentityOperatorRingGNN,
+    "zero-operator-ring": ZeroOperatorRingGNN,
+    "all-failures-ring": AllFailuresRingGNN,
 }
 
 

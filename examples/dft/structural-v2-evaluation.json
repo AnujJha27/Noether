@@ -31,6 +31,30 @@
         "spatial_nonlocality_compatible": true,
         "self_adjoint": true
       }
+    },
+    {
+      "case": "identity-operator-ring",
+      "expected_checks": {
+        "xc_discontinuity_compatible": true,
+        "spatial_nonlocality_compatible": true,
+        "self_adjoint": true
+      }
+    },
+    {
+      "case": "zero-operator-ring",
+      "expected_checks": {
+        "xc_discontinuity_compatible": true,
+        "spatial_nonlocality_compatible": true,
+        "self_adjoint": true
+      }
+    },
+    {
+      "case": "all-failures-ring",
+      "expected_checks": {
+        "xc_discontinuity_compatible": false,
+        "spatial_nonlocality_compatible": false,
+        "self_adjoint": false
+      }
     }
   ]
 }

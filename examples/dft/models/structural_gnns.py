@@ -35,11 +35,16 @@ class StructuralRingGNN(nn.Module):
             if self.xc == "hinge"
             else torch.sigmoid(density.sum())
         )
-        learned_self_energy = (
-            self.base_operator + self.base_operator.T
-            if self.operator == "symmetrized"
-            else self.base_operator
-        )
+        if self.operator == "symmetrized":
+            learned_self_energy = self.base_operator + self.base_operator.T
+        elif self.operator == "identity":
+            learned_self_energy = torch.eye(
+                6, dtype=density.dtype, device=density.device
+            )
+        elif self.operator == "zero":
+            learned_self_energy = torch.zeros_like(self.base_operator)
+        else:
+            learned_self_energy = self.base_operator
         return xc_energy, learned_self_energy, state
 
 
@@ -57,3 +62,15 @@ def UnconstrainedOperatorGNN() -> StructuralRingGNN:
 
 def SmoothXCGNN() -> StructuralRingGNN:
     return StructuralRingGNN(depth=3, operator="symmetrized", xc="smooth")
+
+
+def IdentityOperatorRingGNN() -> StructuralRingGNN:
+    return StructuralRingGNN(depth=3, operator="identity", xc="hinge")
+
+
+def ZeroOperatorRingGNN() -> StructuralRingGNN:
+    return StructuralRingGNN(depth=3, operator="zero", xc="hinge")
+
+
+def AllFailuresRingGNN() -> StructuralRingGNN:
+    return StructuralRingGNN(depth=2, operator="unconstrained", xc="smooth")
