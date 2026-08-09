@@ -93,11 +93,7 @@ def _object(path: str) -> dict[str, Any]:
 
 
 def _default_lean_command() -> str:
-    lake = shutil.which("lake")
-    if lake is None:
-        candidate = Path.home() / ".elan/bin/lake"
-        lake = str(candidate) if candidate.exists() else "lake"
-    return f"{lake} env lean -j 1"
+    return f"{_lake_executable()} env lean -j 1"
 
 
 def _lake_executable() -> str:

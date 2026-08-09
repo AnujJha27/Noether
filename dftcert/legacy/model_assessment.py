@@ -230,8 +230,7 @@ def _chat_completions(*, base_url: str, model: str, system: str, prompt: str,
     try:
         return _extract_json_object(first)
     except ValueError:
-        # A local model occasionally ignores JSON mode. Retry once with an
-        # explicit repair instruction rather than interpreting malformed text.
+        # Retry once with an explicit JSON-only correction.
         body["messages"][0]["content"] += (
             "\n\nYour previous response was malformed. Return one syntactically valid JSON object only."
         )
