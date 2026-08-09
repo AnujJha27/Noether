@@ -642,6 +642,39 @@ class LocalPipelineSecurityTests(unittest.TestCase):
             ))
             self.assertEqual(pipeline.resume()["status"], "approved")
 
+    def test_pipeline_reports_refuted_and_inconclusive_without_proof_search(self):
+        policy = Policy.load(POLICY_PATH)
+        for expected, mutate in (
+            ("refuted", lambda manifest: manifest.value["facts"]["self_adjoint"]["value"].update(satisfied=False)),
+            ("inconclusive", lambda manifest: manifest.value["facts"].pop("self_adjoint")),
+        ):
+            with self.subTest(expected=expected), tempfile.TemporaryDirectory() as directory:
+                manifest = ArchitectureManifest.load(ROOT / "examples/dft/example-manifest.json")
+                mutate(manifest)
+                if expected == "inconclusive":
+                    manifest.value["status"] = "extracted_partial"
+                manifest.refresh_hash()
+                root = pathlib.Path(directory)
+                run = LocalRun(root / "run")
+                pipeline = LocalPipeline(
+                    run=run, policy=policy,
+                    config=LocalPipelineConfig(
+                        project_root=str(root / "unused-project"),
+                        verifier_command=("must-not-run",),
+                        verifier_cwd=str(root),
+                        llm_command=("must-not-run",),
+                        lean_command=("must-not-run",),
+                    ),
+                )
+                completed = pipeline.start(manifest)
+                self.assertEqual(completed["status"], "not_approved")
+                self.assertEqual(
+                    completed["non_approved_obligations"][0]["status"], expected
+                )
+                self.assertTrue((run.directory / "report.json").exists())
+                self.assertFalse((run.directory / "Certificate.lean").exists())
+                self.assertEqual(pipeline.resume()["status"], "not_approved")
+
 
 class CertificateTests(unittest.TestCase):
     def setUp(self):

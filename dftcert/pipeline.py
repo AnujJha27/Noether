@@ -19,6 +19,7 @@ from .certificate import verify_certificate
 from .manifest import ArchitectureManifest, canonical_json, sha256_value
 from .obligations import generate_obligations
 from .policy import Policy
+from .report import sanity_report
 
 
 class PipelineError(RuntimeError):
@@ -168,7 +169,7 @@ class LocalPipeline:
         state = self.run.load()
         if state["policy"] != {"id": self.policy.id, "version": self.policy.version}:
             raise PipelineError("run policy differs from the selected policy")
-        if state["status"] == "approved":
+        if state["status"] in {"approved", "not_approved"}:
             return state
         manifest = ArchitectureManifest(state["manifest"])
         manifest.validate(self.policy, require_confirmed=True)
@@ -176,6 +177,27 @@ class LocalPipeline:
         state["generation"] = generated
         if generated["status"] != "obligations_generated":
             self._save(state, generated["status"])
+            return state
+        rejected = [
+            task for task in generated["obligations"]
+            if task["status"] in {"refuted", "inconclusive"}
+        ]
+        if rejected:
+            report = sanity_report(manifest=manifest, policy=self.policy)
+            report_path = self.run.directory / "report.json"
+            report_path.write_text(
+                json.dumps(report, indent=2, sort_keys=True) + "\n", encoding="utf-8"
+            )
+            state["report"] = report
+            state["report_file"] = "report.json"
+            state["non_approved_obligations"] = [
+                {"id": task["id"], "fact": task["fact"], "status": task["status"]}
+                for task in rejected
+            ]
+            self._save(state, "not_approved", {
+                "report_sha256": report["report_sha256"],
+                "obligations": state["non_approved_obligations"],
+            })
             return state
         self._save(state, "proof_search_running")
         prior_results = {
