@@ -30,7 +30,7 @@ check-cpp-deps:
 	  $(CXX) $(CXXFLAGS) -x c++ - -c -o /tmp/noether-json-check.o >/dev/null 2>&1 || \
 	  (echo "Missing C++ dependencies: nlohmann/json.hpp and OpenSSL headers"; \
 	   echo "Install it before building, for example:"; \
-	   echo "  conda install -c conda-forge nlohmann_json"; \
+	   echo "  conda install -c conda-forge nlohmann_json openssl"; \
 	   echo "or ensure the header is available under $$CONDA_PREFIX/include or /usr/include."; \
 	   exit 1)
 
