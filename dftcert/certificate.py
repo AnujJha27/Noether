@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from .manifest import ArchitectureManifest, sha256_file
-from .policy import Policy
+from .legacy.policy import Policy
 
 
 class CertificateError(RuntimeError):

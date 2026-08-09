@@ -54,19 +54,19 @@ dftcert-test:
 
 dftcert-example:
 	test -n "$(DFT_PROJECT)"
-	python3 -m dftcert.cli certificate-check --project "$(DFT_PROJECT)" \
+	python3 -m dftcert.legacy.cli certificate-check --project "$(DFT_PROJECT)" \
 	  --source policies/lean/DFTArchitectureV1Example.lean \
 	  --manifest examples/dft/example-manifest.json \
 	  --lean-command "$(LEAN_COMMAND)" \
 	  --timeout-s "$(DFT_CERT_TIMEOUT_S)" --trusted-local
 
 dftcert-obligations:
-	python3 -m dftcert.cli generate-obligations \
+	python3 -m dftcert.legacy.cli generate-obligations \
 	  --manifest examples/dft/example-manifest.json \
 	  --output build/dft-obligations.json
 
 dftcert-assemble-example:
-	python3 -m dftcert.cli assemble-certificate \
+	python3 -m dftcert.legacy.cli assemble-certificate \
 	  --manifest examples/dft/example-manifest.json \
 	  --proof-results examples/dft/example-proof-results.json \
 	  --source-output build/DFTGeneratedCertificate.lean \
@@ -74,7 +74,7 @@ dftcert-assemble-example:
 
 dftcert-certify-example:
 	test -n "$(DFT_PROJECT)"
-	python3 -m dftcert.cli certify-results \
+	python3 -m dftcert.legacy.cli certify-results \
 	  --manifest examples/dft/example-manifest.json \
 	  --proof-results examples/dft/example-proof-results.json \
 	  --source-output build/DFTGeneratedCertificate.lean \
@@ -86,7 +86,7 @@ dftcert-certify-example:
 dftcert-search-example: $(BUILD)/proof-search
 	test -n "$(DFT_PROJECT)"
 	test -n "$(LLM_COMMAND)"
-	python3 -m dftcert.cli generate-obligations \
+	python3 -m dftcert.legacy.cli generate-obligations \
 	  --manifest examples/dft/example-manifest.json --jsonl | \
 	  PROOF_SEARCH_ALLOW_GENERATED_OBLIGATIONS=1 \
 	  PROOF_SEARCH_PROJECT_DIR="$(DFT_PROJECT)" \
@@ -96,7 +96,7 @@ dftcert-search-example: $(BUILD)/proof-search
 
 sanity-demo:
 	mkdir -p $(BUILD)
-	python3 -m dftcert.cli hypothesis-draft \
+	python3 -m dftcert.legacy.cli hypothesis-draft \
 	  --model-id demo-hypothesis \
 	  --hypothesis "$$(cat examples/hypotheses/pass.txt)" \
 	  --output build/demo-hypothesis-manifest.json \

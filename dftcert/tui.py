@@ -7,14 +7,14 @@ import textwrap
 from pathlib import Path
 from typing import Any
 
-from .hypothesis import draft_hypothesis, policy_coverage
+from .legacy.hypothesis import draft_hypothesis, policy_coverage
 from .manifest import ArchitectureManifest
-from .model_assessment import (
+from .legacy.model_assessment import (
     apply_assumption_status,
     finalize_assumption_review,
 )
-from .policy import Policy
-from .report import sanity_report
+from .legacy.policy import Policy
+from .legacy.report import sanity_report
 
 
 ROOT = Path(__file__).resolve().parents[1]

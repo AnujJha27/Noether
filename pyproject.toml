@@ -20,13 +20,14 @@ classifiers = [
 
 [project.scripts]
 noether = "dftcert.local_cli:main"
-noether-dftcert = "dftcert.cli:main"
+noether-structural = "dftcert.structural.cli:main"
+noether-dftcert = "dftcert.legacy.cli:main"
 noether-orchestrator = "orchestrator.cli:main"
 noether-replay = "orchestrator.replay:main"
 noether-tui = "dftcert.tui:main"
 
 [tool.setuptools]
-packages = ["dftcert", "orchestrator", "extractors"]
+packages = ["dftcert", "dftcert.legacy", "dftcert.structural", "orchestrator", "extractors"]
 py-modules = []
 
 [tool.ruff]

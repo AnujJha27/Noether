@@ -8,7 +8,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .policy import Policy
+from .legacy.policy import Policy
 
 
 class ManifestError(ValueError):

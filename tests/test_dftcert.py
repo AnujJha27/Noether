@@ -9,22 +9,22 @@ import unittest
 import zipfile
 
 from dftcert.certificate import CertificateError, build_check_source, verify_certificate
-from dftcert.assessment import assess_manifest
-from dftcert.analysis import analyze_inventory
-from dftcert.assembly import AssemblyError, assemble_certificate
-from dftcert.context import ContextError, WorkerContextRegistry
-from dftcert.english import interpret_english
-from dftcert.extraction import apply_extraction_result
-from dftcert.hypothesis import draft_hypothesis, policy_coverage
+from dftcert.legacy.assessment import assess_manifest
+from dftcert.legacy.analysis import analyze_inventory
+from dftcert.legacy.assembly import AssemblyError, assemble_certificate
+from dftcert.legacy.context import ContextError, WorkerContextRegistry
+from dftcert.legacy.english import interpret_english
+from dftcert.legacy.extraction import apply_extraction_result
+from dftcert.legacy.hypothesis import draft_hypothesis, policy_coverage
 from dftcert.manifest import ArchitectureManifest, ManifestError
-from dftcert.model_assessment import _extract_json_object, assessment_payload, assumption_rows
-from dftcert.obligations import generate_obligations
-from dftcert.policy import Policy, PolicyError
-from dftcert.pt2 import inspect_pt2, pending_manifest
-from dftcert.report import sanity_report
+from dftcert.legacy.model_assessment import _extract_json_object, assessment_payload, assumption_rows
+from dftcert.legacy.obligations import generate_obligations
+from dftcert.legacy.policy import Policy, PolicyError
+from dftcert.legacy.pt2 import inspect_pt2, pending_manifest
+from dftcert.legacy.report import sanity_report
 from dftcert.sandbox import BubblewrapExtractor, SandboxUnavailable
 from dftcert.security import AuditLog, sign_attestation, verify_attestation
-from dftcert.structural_v2 import (
+from dftcert.structural import (
     assemble_structural_certificate,
     assess_structural_ir,
     confirmed_description_ir,
@@ -33,7 +33,7 @@ from dftcert.structural_v2 import (
     structural_failure_witnesses,
     validate_translation,
 )
-from dftcert.pipeline import LocalPipeline, LocalPipelineConfig, LocalRun
+from dftcert.legacy.pipeline import LocalPipeline, LocalPipelineConfig, LocalRun
 from dftcert.tui import assessment_lines, build_artifact_report, build_hypothesis_report, build_run_inspector, event_summary, render_plain
 from extractors.torch_export_worker import inventory_node
 from examples.dft.evaluate_structural_v2 import score as score_structural_v2
@@ -45,6 +45,13 @@ POLICY_PATH = ROOT / "policies/dft-architecture-v1.json"
 
 
 class PolicyTests(unittest.TestCase):
+    def test_legacy_and_structural_compatibility_imports(self):
+        from dftcert.policy import Policy as CompatibilityPolicy
+        from dftcert.structural_v2 import assess_structural_ir as compatibility_assess
+
+        self.assertIs(CompatibilityPolicy, Policy)
+        self.assertIs(compatibility_assess, assess_structural_ir)
+
     def test_policy_has_three_required_obligations(self):
         policy = Policy.load(POLICY_PATH)
         self.assertEqual(policy.id, "dft-architecture-v1")

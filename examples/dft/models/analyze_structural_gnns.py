@@ -4,7 +4,7 @@ import argparse
 import json
 from pathlib import Path
 
-from dftcert.structural_v2 import (
+from dftcert.structural import (
     assess_structural_ir,
     generate_structural_obligations,
     structural_ir_from_inventory,

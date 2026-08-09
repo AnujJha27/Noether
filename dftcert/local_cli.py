@@ -11,22 +11,22 @@ import sys
 from pathlib import Path
 from typing import Any
 
-from .analysis import analyze_inventory
-from .extraction import apply_extraction_result
+from .legacy.analysis import analyze_inventory
+from .legacy.extraction import apply_extraction_result
 from .manifest import ArchitectureManifest
-from .model_assessment import (
+from .legacy.model_assessment import (
     assessment_payload,
     confirm_assumptions_interactively,
     draft_with_llm,
     read_description,
 )
-from .hypothesis import draft_hypothesis
-from .pipeline import (
+from .legacy.hypothesis import draft_hypothesis
+from .legacy.pipeline import (
     LocalPipeline, LocalPipelineConfig, LocalRun, PipelineError, command_tuple,
 )
-from .policy import Policy
-from .pt2 import pending_manifest
-from .report import sanity_report
+from .legacy.policy import Policy
+from .legacy.pt2 import pending_manifest
+from .legacy.report import sanity_report
 from .sandbox import BubblewrapExtractor
 
 
@@ -135,12 +135,12 @@ def _ensure_lean_project_built(project: Path, target: str | None = None) -> None
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(
         prog="noether",
-        description="Local, resumable DFT architecture certification",
+        description="Structural V2 certification with retained legacy V1 workflows",
     )
     root.add_argument("--policy", default=str(DEFAULT_POLICY))
     commands = root.add_subparsers(dest="command", required=True)
 
-    certify = commands.add_parser("certify")
+    certify = commands.add_parser("certify", help="run the legacy V1 policy pipeline")
     certify.add_argument("--run-dir", required=True)
     certify.add_argument("--project", required=True)
     certify.add_argument("--llm-command", required=True)
@@ -174,7 +174,7 @@ def parser() -> argparse.ArgumentParser:
     agentic.add_argument("orchestrator_args", nargs=argparse.REMAINDER)
 
     structural = commands.add_parser(
-        "structural", help="forward arguments to the artifact-grounded Structural V2 workflow"
+        "structural", help="run the primary Structural V2 workflow"
     )
     structural.add_argument("structural_args", nargs=argparse.REMAINDER)
 
@@ -488,7 +488,7 @@ def _run_assess(options: argparse.Namespace, policy: Policy) -> int:
     description = read_description(options.description)
     run_dir = Path(options.run_dir)
     if options.llm == "deterministic":
-        from .hypothesis import draft_hypothesis
+        from .legacy.hypothesis import draft_hypothesis
 
         manifest = draft_hypothesis(
             model_id=options.model_id,
@@ -562,7 +562,7 @@ def main(argv: list[str] | None = None) -> int:
         else:
             options = parser().parse_args(raw_args)
         if options.command == "structural":
-            from .structural_cli import main as structural_main
+            from .structural.cli import main as structural_main
             return structural_main(options.structural_args)
         policy = Policy.load(options.policy)
         if options.command == "status":

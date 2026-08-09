@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any, Sequence
 
 from .manifest import ManifestError, sha256_file
-from .pt2 import inspect_pt2
+from .legacy.pt2 import inspect_pt2
 from .security import sign_attestation
 
 
