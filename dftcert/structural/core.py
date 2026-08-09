@@ -15,10 +15,29 @@ from ..manifest import ManifestError, sha256_value
 
 
 IR_SCHEMA_VERSION = 2
-ANALYZER_VERSION = "dft-structural-analysis-v2"
+ANALYZER_VERSION = "dft-structural-analysis-v3"
 COMPILER_VERSION = "dft-structural-lean-v2"
 POLICY_VERSION = "dft-structural-v2"
 _FORBIDDEN = re.compile(r"\b(sorry|admit|axiom|unsafe)\b")
+_ZERO_TARGETS = {"aten.zeros.default", "aten.zero.default"}
+_IDENTITY_TARGETS = {"aten.eye.default"}
+_ADD_TARGETS = {"aten.add.tensor"}
+_ADJOINT_TARGETS = {
+    "aten.transpose.int", "aten.permute.default", "aten.t.default",
+    "aten.numpy_t.default",
+}
+_HINGE_TARGETS = {
+    "aten.relu.default", "aten.clamp_min.default", "aten.maximum.default",
+}
+_SMOOTH_TARGETS = {
+    "aten.sigmoid.default", "aten.softplus.default", "aten.tanh.default",
+}
+_ADJACENCY_CAST_TARGETS = {
+    "aten.to.dtype", "aten._to_copy.default", "prims.convert_element_type.default",
+}
+_MESSAGE_TARGETS = {
+    "aten.matmul.default", "aten.mm.default", "aten.bmm.default",
+}
 
 
 def _refs(value: Any) -> list[str]:
@@ -62,8 +81,8 @@ def _target(node: dict[str, Any]) -> str:
     return str(node.get("target", "")).lower()
 
 
-def _has_target(nodes: list[dict[str, Any]], *needles: str) -> bool:
-    return any(any(needle in _target(node) for needle in needles) for node in nodes)
+def _has_target(nodes: list[dict[str, Any]], targets: set[str]) -> bool:
+    return any(_target(node) in targets for node in nodes)
 
 
 def _direct_ref(value: Any) -> str | None:
@@ -77,19 +96,17 @@ def _operator_construction(
     by_name = {node["name"]: node for node in nodes if isinstance(node.get("name"), str)}
     provenance = [node["name"] for node in _ancestors(nodes, root)]
     root_node = by_name.get(root, {})
-    if _has_target([root_node], "zeros", "zero.default"):
+    if _has_target([root_node], _ZERO_TARGETS):
         return "zero", provenance
-    if _has_target([root_node], "eye"):
+    if _has_target([root_node], _IDENTITY_TARGETS):
         return "identity", provenance
-    if _has_target([root_node], "add"):
+    if _has_target([root_node], _ADD_TARGETS):
         arguments = _refs(root_node.get("args"))
         if len(arguments) >= 2:
             left, right = arguments[:2]
             for base, transformed in ((left, right), (right, left)):
                 transformed_node = by_name.get(transformed, {})
-                if _has_target(
-                    [transformed_node], "transpose", "permute", "t.default", "numpy_t"
-                ):
+                if _has_target([transformed_node], _ADJOINT_TARGETS):
                     if _direct_ref(transformed_node.get("args")) == base:
                         return "symmetrized", provenance
     if root_node.get("op") in {"placeholder", "get_attr"}:
@@ -100,9 +117,9 @@ def _operator_construction(
 def _xc_form(nodes: list[dict[str, Any]], root: str) -> tuple[str, list[str]]:
     ancestors = _ancestors(nodes, root)
     provenance = [node["name"] for node in ancestors]
-    if _has_target(ancestors, "relu", "clamp_min", "maximum"):
+    if _has_target(ancestors, _HINGE_TARGETS):
         return "hinge", provenance
-    if _has_target(ancestors, "sigmoid", "softplus", "tanh"):
+    if _has_target(ancestors, _SMOOTH_TARGETS):
         return "smooth", provenance
     return "unsupported", provenance
 
@@ -113,7 +130,7 @@ def _adjacency_aliases(nodes: list[dict[str, Any]], adjacency_inputs: list[str])
         additions = {
             node["name"] for node in nodes
             if isinstance(node.get("name"), str)
-            and any(name in _target(node) for name in ("aten.to", "_to_copy", "convert_element_type"))
+            and _has_target([node], _ADJACENCY_CAST_TARGETS)
             and len(_refs(node.get("args"))) == 1
             and _refs(node.get("args"))[0] in aliases
         }
@@ -132,7 +149,7 @@ def _message_chain(
     while True:
         node = by_name.get(current, {})
         refs = _refs(node.get("args"))
-        if not any(name in _target(node) for name in ("matmul", "mm.default", "bmm")):
+        if not _has_target([node], _MESSAGE_TARGETS):
             return stages
         adjacency = [ref for ref in refs if ref in adjacency_aliases]
         state = [ref for ref in refs if ref not in adjacency_aliases]

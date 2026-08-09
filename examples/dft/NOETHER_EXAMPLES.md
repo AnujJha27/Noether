@@ -1,7 +1,8 @@
 # Noether examples for the DFT policy library
 
 These examples are specific to the DFT V1 policy profile in
-`policies/dft-architecture-v1.json`.
+`policies/dft-architecture-v1.json`. V1 is retained under `dftcert.legacy` for
+regression and migration; new artifact certification should use Structural V2.
 
 ## Inspect the context
 

@@ -5,6 +5,9 @@ artifact have the architectural constructions required by the DFT policy?** It
 does not evaluate floating-point outputs or claim that trained weights are
 physically accurate.
 
+The exact supported Torch patterns and their assumptions are specified in
+[the Structural V2 translation specification](../../STRUCTURAL_V2_TRANSLATION_SPEC.md).
+
 ```text
 model.py
    |
@@ -143,6 +146,12 @@ claim about a `.pt2` file. The result is labelled
 The remaining generation, agent, assembly, and Lean-check commands are the
 same. The distinction between a specification certificate and an artifact
 certificate is permanent and recorded in the assembly report.
+
+Human confirmation only says that the reviewed IR is the specification the
+reviewer intends Noether to attempt to prove. It does not establish any
+structural property. The confirmed IR still generates the same three classes
+of Lean obligation, and certificate assembly still requires a Lean-verified
+proof result for every generated theorem.
 
 ## Direct Qwen comparison
 

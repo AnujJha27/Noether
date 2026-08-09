@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 import json
 import os
 import pathlib
@@ -776,6 +777,42 @@ class StructuralV2Tests(unittest.TestCase):
         ir["message_passing"]["depth"] = 2
         with self.assertRaises(ManifestError):
             validate_translation(inventory=inventory, value=ir, input_constraints=self.constraints())
+
+    def test_translation_uses_only_reviewed_torch_patterns(self):
+        def translate(inventory):
+            return structural_ir_from_inventory(
+                inventory=inventory, artifact_sha256="artifact",
+                extractor_version="test", input_constraints=self.constraints(),
+            )
+
+        for target, expected in (
+            ("aten.relu.default", "hinge"),
+            ("aten.sigmoid.default", "smooth"),
+            ("custom.relu_like", "unsupported"),
+        ):
+            inventory = self.inventory()
+            inventory["nodes"][6]["target"] = target
+            self.assertEqual(translate(inventory)["xc"]["form"], expected)
+
+        for target, expected in (
+            ("aten.zeros.default", "zero"),
+            ("aten.eye.default", "identity"),
+            ("custom.zeros_like", "unsupported"),
+        ):
+            inventory = self.inventory()
+            inventory["nodes"][8]["target"] = target
+            self.assertEqual(translate(inventory)["operator"]["construction"], expected)
+
+        inventory = copy.deepcopy(self.inventory())
+        ref = lambda name: {"node": name}
+        inventory["nodes"].insert(3, {
+            "name": "adjacency_cast", "op": "call_function",
+            "target": "aten.to.dtype", "args": [ref("b_adjacency")], "kwargs": {},
+        })
+        for node in inventory["nodes"]:
+            if node["name"].startswith("matmul"):
+                node["args"][0] = ref("adjacency_cast")
+        self.assertEqual(translate(inventory)["message_passing"]["depth"], 3)
 
     def ir(self, *, depth=3, xc="hinge", operator="symmetrized"):
         return confirmed_description_ir(

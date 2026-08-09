@@ -68,6 +68,10 @@ Demo `.pt2` files are generated under `build/`; they are not committed.
 - [x] Add resumable inference epochs and stagnation pause semantics.
 - [x] Add direct-Qwen versus harness-Qwen evaluation fixtures and metrics.
 - [x] Run all verifier, orchestrator, DFT, replay, and certificate tests.
+- [x] Move the primary implementation under `dftcert.structural` and V1 under
+  `dftcert.legacy`, retaining compatibility imports for one release.
+- [x] Publish the exact Torch-to-IR mapping, evidence classes, assumptions, and
+  fail-closed change-control requirements.
 
 ## Acceptance criteria
 

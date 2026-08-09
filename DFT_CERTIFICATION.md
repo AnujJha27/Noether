@@ -1,4 +1,9 @@
-# DFT Certification Prototype
+# Legacy DFT V1 certification prototype
+
+This document describes the retained V1 policy pipeline under
+`dftcert.legacy`. Structural V2 is the primary architecture; see
+[the Structural V2 workflow](examples/dft/STRUCTURAL_V2.md) and its
+[translation specification](STRUCTURAL_V2_TRANSLATION_SPEC.md).
 
 This implementation is the first executable slice of
 [DFT_INTEGRATION_PLAN.md](DFT_INTEGRATION_PLAN.md). It establishes the trust
