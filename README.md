@@ -65,7 +65,6 @@ certificates trust the human-confirmed interpretation. Both require Lean.
 
 ## Documentation
 
-- [Build guide](BUILD_GUIDE.md)
 - [Orchestrator and provider guide](ORCHESTRATOR.md)
 - [Structural V2 demo commands](STRUCTURAL_V2_DEMOS.md)
 - [Structural V2 workflow and trust model](examples/dft/STRUCTURAL_V2.md)
