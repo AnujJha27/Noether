@@ -16,6 +16,11 @@ struct VerificationResult {
   int exit_code = -1;
 };
 
+std::filesystem::path resolved_lake_executable();
+std::filesystem::path module_artifact(const std::filesystem::path& project_dir,
+                                      const std::string& module);
+std::string lean_toolchain_identity(const std::filesystem::path& project_dir);
+
 class LeanRunner {
  public:
   explicit LeanRunner(std::filesystem::path project_dir);

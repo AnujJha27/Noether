@@ -27,6 +27,7 @@ class Cache {
  private:
   void execute(const char* sql);
   sqlite3* database_ = nullptr;
+  std::filesystem::path project_dir_;
   std::string fingerprint_;
   std::mutex mutex_;
 };

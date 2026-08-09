@@ -8,6 +8,7 @@
 #include <fstream>
 #include <pwd.h>
 #include <sstream>
+#include <stdexcept>
 #include <sys/resource.h>
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -26,13 +27,29 @@ bool contains_memory_error(const std::string& text) {
          text.find("cannot allocate memory") != std::string::npos;
 }
 
-std::string lake_executable() {
-  if (const char* configured = std::getenv("PROOF_SEARCH_LAKE")) return configured;
+std::filesystem::path find_executable(const std::string& name) {
+  if (name.find('/') != std::string::npos) {
+    const auto path = std::filesystem::absolute(name);
+    if (access(path.c_str(), X_OK) == 0) return std::filesystem::canonical(path);
+    return path;
+  }
+  std::stringstream paths(std::getenv("PATH") ? std::getenv("PATH") : "");
+  std::string directory;
+  while (std::getline(paths, directory, ':')) {
+    const auto candidate = std::filesystem::path(directory.empty() ? "." : directory) / name;
+    if (access(candidate.c_str(), X_OK) == 0) return std::filesystem::canonical(candidate);
+  }
+  return name;
+}
+
+std::filesystem::path configured_lake_executable() {
+  if (const char* configured = std::getenv("PROOF_SEARCH_LAKE"))
+    return find_executable(configured);
   if (const passwd* user = getpwuid(getuid())) {
     const auto candidate = std::filesystem::path(user->pw_dir) / ".elan/bin/lake";
-    if (std::filesystem::exists(candidate)) return candidate.string();
+    if (access(candidate.c_str(), X_OK) == 0) return std::filesystem::canonical(candidate);
   }
-  return "lake";
+  return find_executable("lake");
 }
 
 std::string declaration_suffix(const std::string& declaration) {
@@ -57,6 +74,12 @@ void drain_pipe(int fd, std::string& output) {
   }
 }
 
+}  // namespace
+
+std::filesystem::path resolved_lake_executable() {
+  return configured_lake_executable();
+}
+
 std::filesystem::path module_artifact(const std::filesystem::path& project_dir,
                                       const std::string& module) {
   std::filesystem::path relative;
@@ -67,7 +90,34 @@ std::filesystem::path module_artifact(const std::filesystem::path& project_dir,
   return project_dir / ".lake/build/lib/lean" / relative;
 }
 
-}  // namespace
+std::string lean_toolchain_identity(const std::filesystem::path& project_dir) {
+  const auto lake = resolved_lake_executable();
+  int output_pipe[2];
+  if (pipe(output_pipe) != 0) throw std::runtime_error("cannot inspect Lean toolchain");
+  const pid_t child = fork();
+  if (child < 0) {
+    close(output_pipe[0]); close(output_pipe[1]);
+    throw std::runtime_error("cannot inspect Lean toolchain");
+  }
+  if (child == 0) {
+    close(output_pipe[0]);
+    dup2(output_pipe[1], STDOUT_FILENO);
+    dup2(output_pipe[1], STDERR_FILENO);
+    close(output_pipe[1]);
+    if (chdir(project_dir.c_str()) != 0) _exit(126);
+    execlp(lake.c_str(), "lake", "env", "lean", "--version", static_cast<char*>(nullptr));
+    _exit(errno == ENOENT ? 127 : 126);
+  }
+  close(output_pipe[1]);
+  int status = 0;
+  waitpid(child, &status, 0);
+  std::string output;
+  drain_pipe(output_pipe[0], output);
+  close(output_pipe[0]);
+  if (!WIFEXITED(status) || WEXITSTATUS(status) != 0)
+    throw std::runtime_error("cannot resolve Lean toolchain identity: " + output);
+  return lake.string() + '\0' + output;
+}
 
 LeanRunner::LeanRunner(std::filesystem::path project_dir)
     : project_dir_(std::filesystem::absolute(std::move(project_dir))) {}
@@ -84,7 +134,7 @@ VerificationResult LeanRunner::verify(const VerifyRequest& request,
         "Lean project is not built or the requested module is missing.\n"
         "Expected compiled module: " + artifact.string() + "\n"
         "Run this before proof search:\n"
-        "  cd " + project_dir_.string() + " && " + lake_executable() + " build";
+        "  cd " + project_dir_.string() + " && " + resolved_lake_executable().string() + " build";
     return result;
   }
 
@@ -145,7 +195,7 @@ VerificationResult LeanRunner::verify(const VerifyRequest& request,
     setrlimit(RLIMIT_AS, &memory);
     setenv("LEAN_NUM_THREADS", "1", 1);
     if (chdir(project_dir_.c_str()) != 0) _exit(126);
-    const std::string lake = lake_executable();
+    const std::string lake = resolved_lake_executable().string();
     const std::string lean_memory = std::to_string(request.limits.memory_mb);
     execlp(lake.c_str(), "lake", "env", "lean", "-j", "1", "-M",
            lean_memory.c_str(), source.c_str(), static_cast<char*>(nullptr));

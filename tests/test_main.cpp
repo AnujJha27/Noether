@@ -7,6 +7,7 @@
 #include <chrono>
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <iostream>
 #include <stdexcept>
 #include <thread>
@@ -97,6 +98,7 @@ void cache_tests() {
     request.parent_attempt_id = "parent";
     request.subgoal_description = "identity subgoal";
     const auto key = cache.key_for(request);
+    expect(key.size() == 64, "cache key is not a SHA-256 digest");
     VerificationResult saved{"verified", "", 12, false, 0};
     cache.store(key, saved);
     cache.record_attempt(request, key, saved.status);
@@ -104,6 +106,52 @@ void cache_tests() {
     expect(found && found->cached && found->status == "verified", "cache round trip failed");
   }
   std::filesystem::remove(path);
+
+  const auto project = std::filesystem::temp_directory_path() / "proof-search-cache-context";
+  const auto database = project / "cache.db";
+  const auto lake = project / "fake-lake";
+  const auto artifact = project / ".lake/build/lib/lean/Test/Module.olean";
+  std::filesystem::remove_all(project);
+  std::filesystem::create_directories(artifact.parent_path());
+  auto write = [](const std::filesystem::path& file, const std::string& contents) {
+    std::ofstream output(file, std::ios::binary);
+    output << contents;
+  };
+  write(project / "lean-toolchain", "leanprover/lean4:test\n");
+  write(project / "Main.lean", "def value := 1\n");
+  write(lake, "#!/bin/sh\nprintf 'Lean test v1\\n'\n");
+  std::filesystem::permissions(lake, std::filesystem::perms::owner_exec,
+                               std::filesystem::perm_options::add);
+  write(artifact, "module-v1");
+  const char* previous_lake = std::getenv("PROOF_SEARCH_LAKE");
+  const std::string saved_lake = previous_lake ? previous_lake : "";
+  setenv("PROOF_SEARCH_LAKE", lake.c_str(), 1);
+  VerifyRequest contextual;
+  contextual.project = "test";
+  contextual.module = "Test.Module";
+  contextual.declaration = "theorem generated : True";
+  contextual.patch = "by trivial";
+  std::string first_key;
+  {
+    Cache cache(database, project);
+    first_key = cache.key_for(contextual);
+  }
+  write(artifact, "module-v2");
+  std::string module_key;
+  {
+    Cache cache(database, project);
+    module_key = cache.key_for(contextual);
+  }
+  expect(first_key != module_key, "compiled module change did not invalidate cache");
+  write(lake, "#!/bin/sh\nprintf 'Lean test v2\\n'\n");
+  {
+    Cache cache(database, project);
+    expect(module_key != cache.key_for(contextual),
+           "Lean toolchain change did not invalidate cache");
+  }
+  if (previous_lake) setenv("PROOF_SEARCH_LAKE", saved_lake.c_str(), 1);
+  else unsetenv("PROOF_SEARCH_LAKE");
+  std::filesystem::remove_all(project);
 }
 
 void lean_tests() {

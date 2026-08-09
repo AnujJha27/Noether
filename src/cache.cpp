@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <fstream>
 #include <iomanip>
+#include <openssl/sha.h>
 #include <sstream>
 #include <stdexcept>
 #include <vector>
@@ -16,13 +17,11 @@ std::string read_file(const std::filesystem::path& path) {
 }
 
 std::string hash_text(const std::string& text) {
-  std::uint64_t hash = 1469598103934665603ULL;
-  for (const unsigned char byte : text) {
-    hash ^= byte;
-    hash *= 1099511628211ULL;
-  }
+  unsigned char digest[SHA256_DIGEST_LENGTH];
+  SHA256(reinterpret_cast<const unsigned char*>(text.data()), text.size(), digest);
   std::ostringstream output;
-  output << std::hex << std::setfill('0') << std::setw(16) << hash;
+  output << std::hex << std::setfill('0');
+  for (const unsigned char byte : digest) output << std::setw(2) << static_cast<int>(byte);
   return output.str();
 }
 
@@ -33,7 +32,31 @@ void bind(sqlite3_stmt* statement, int index, const std::string& value) {
 }  // namespace
 
 Cache::Cache(const std::filesystem::path& database_path,
-             const std::filesystem::path& project_dir) {
+             const std::filesystem::path& project_dir)
+    : project_dir_(std::filesystem::absolute(project_dir)) {
+  std::vector<std::filesystem::path> inputs;
+  std::error_code filesystem_error;
+  for (std::filesystem::recursive_directory_iterator iterator(project_dir_, filesystem_error), end;
+       !filesystem_error && iterator != end; iterator.increment(filesystem_error)) {
+    if (iterator->is_directory() && iterator->path().filename() == ".lake") {
+      iterator.disable_recursion_pending();
+      continue;
+    }
+    if (!iterator->is_regular_file()) continue;
+    const auto filename = iterator->path().filename().string();
+    if (iterator->path().extension() == ".lean" || filename == "lean-toolchain" ||
+        filename == "lakefile.toml" || filename == "lakefile.lean" ||
+        filename == "lake-manifest.json")
+      inputs.push_back(iterator->path());
+  }
+  std::sort(inputs.begin(), inputs.end());
+  std::string project_contents = "noether-verifier-cache-v2\0" +
+                                 project_dir_.string() + '\0' +
+                                 lean_toolchain_identity(project_dir_) + '\0';
+  for (const auto& input : inputs)
+    project_contents += std::filesystem::relative(input, project_dir_).string() + "\0" + read_file(input) + "\0";
+  fingerprint_ = hash_text(project_contents);
+
   if (sqlite3_open_v2(database_path.c_str(), &database_,
                       SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE | SQLITE_OPEN_FULLMUTEX,
                       nullptr) != SQLITE_OK) {
@@ -54,25 +77,6 @@ Cache::Cache(const std::filesystem::path& database_path,
   execute("CREATE TABLE IF NOT EXISTS subgoal_links ("
           "parent_attempt_id TEXT NOT NULL, child_attempt_id TEXT NOT NULL, description TEXT, "
           "PRIMARY KEY(parent_attempt_id, child_attempt_id))");
-  std::vector<std::filesystem::path> inputs;
-  std::error_code filesystem_error;
-  for (std::filesystem::recursive_directory_iterator iterator(project_dir, filesystem_error), end;
-       !filesystem_error && iterator != end; iterator.increment(filesystem_error)) {
-    if (iterator->is_directory() && iterator->path().filename() == ".lake") {
-      iterator.disable_recursion_pending();
-      continue;
-    }
-    if (!iterator->is_regular_file()) continue;
-    const auto filename = iterator->path().filename().string();
-    if (iterator->path().extension() == ".lean" || filename == "lean-toolchain" ||
-        filename == "lakefile.toml" || filename == "lakefile.lean")
-      inputs.push_back(iterator->path());
-  }
-  std::sort(inputs.begin(), inputs.end());
-  std::string project_contents;
-  for (const auto& input : inputs)
-    project_contents += std::filesystem::relative(input, project_dir).string() + "\0" + read_file(input) + "\0";
-  fingerprint_ = hash_text(project_contents);
 }
 
 Cache::~Cache() { if (database_) sqlite3_close(database_); }
@@ -88,7 +92,9 @@ void Cache::execute(const char* sql) {
 
 std::string Cache::key_for(const VerifyRequest& request) const {
   std::ostringstream value;
-  value << fingerprint_ << '\0' << request.project << '\0' << request.module << '\0'
+  const auto artifact = module_artifact(project_dir_, request.module);
+  value << fingerprint_ << '\0' << (std::filesystem::exists(artifact) ? hash_text(read_file(artifact)) : "module-missing")
+        << '\0' << request.project << '\0' << request.module << '\0'
         << request.verification_mode << '\0' << request.preamble << '\0'
         << request.declaration << '\0' << request.target << '\0' << request.patch << '\0'
         << request.limits.wall_time_ms << ':'

@@ -1,7 +1,7 @@
 CXX ?= g++
 CONDA_INCLUDE := $(if $(CONDA_PREFIX),-I$(CONDA_PREFIX)/include,)
 CXXFLAGS := -std=c++17 -Wall -Wextra -Wpedantic -g -pthread -Iinclude $(CONDA_INCLUDE)
-LDFLAGS := -pthread -lsqlite3
+LDFLAGS := -pthread -lsqlite3 -lcrypto
 ifeq ($(RELEASE),1)
 CXXFLAGS := -std=c++17 -Wall -Wextra -Wpedantic -O2 -DNDEBUG -pthread -Iinclude $(CONDA_INCLUDE)
 endif
@@ -26,9 +26,9 @@ $(BUILD):
 	mkdir -p $(BUILD)
 
 check-cpp-deps:
-	@printf '%s\n' '#include <nlohmann/json.hpp>' 'int main() { return 0; }' | \
+	@printf '%s\n' '#include <nlohmann/json.hpp>' '#include <openssl/sha.h>' 'int main() { return 0; }' | \
 	  $(CXX) $(CXXFLAGS) -x c++ - -c -o /tmp/noether-json-check.o >/dev/null 2>&1 || \
-	  (echo "Missing C++ dependency: nlohmann/json.hpp"; \
+	  (echo "Missing C++ dependencies: nlohmann/json.hpp and OpenSSL headers"; \
 	   echo "Install it before building, for example:"; \
 	   echo "  conda install -c conda-forge nlohmann_json"; \
 	   echo "or ensure the header is available under $$CONDA_PREFIX/include or /usr/include."; \
