@@ -70,7 +70,7 @@ clarifying questions, and writes a report without treating the interpretation
 as authoritative:
 
 ```bash
-python3 -m dftcert.cli hypothesis-draft \
+python3 -m dftcert.legacy.cli hypothesis-draft \
   --model-id my-hypothesis \
   --hypothesis "A DFT architecture with an XC derivative discontinuity, nonlocal coupling, and a self-adjoint operator." \
   --output build/my-hypothesis-draft.json \
@@ -80,7 +80,7 @@ python3 -m dftcert.cli hypothesis-draft \
 Inspect the policy coverage map:
 
 ```bash
-python3 -m dftcert.cli coverage
+python3 -m dftcert.legacy.cli coverage
 ```
 
 The TUI and `hypothesis-draft` are intake tools. They do not prove claims and
@@ -90,7 +90,7 @@ and certificate-check stages.
 Create a draft manually:
 
 ```bash
-python3 -m dftcert.cli english-draft \
+python3 -m dftcert.legacy.cli english-draft \
   --model-id my-model \
   --description "A self-adjoint nonlocal model with an XC discontinuity." \
   --output build/my-model-draft.json
@@ -99,7 +99,7 @@ python3 -m dftcert.cli english-draft \
 Or ask a configured command-model adapter to interpret it:
 
 ```bash
-python3 -m dftcert.cli english-interpret \
+python3 -m dftcert.legacy.cli english-interpret \
   --model-id my-model \
   --description "..." \
   --llm-command "/path/to/model-adapter" \
@@ -112,7 +112,7 @@ output authoritative.
 After reviewing the full draft, explicitly confirm every policy fact:
 
 ```bash
-python3 -m dftcert.cli confirm \
+python3 -m dftcert.legacy.cli confirm \
   --manifest build/my-model-draft.json \
   --facts examples/dft/confirmed-facts.json \
   --output build/my-model-confirmed.json
@@ -121,7 +121,7 @@ python3 -m dftcert.cli confirm \
 Check the current evidence state:
 
 ```bash
-python3 -m dftcert.cli assess \
+python3 -m dftcert.legacy.cli assess \
   --manifest build/my-model-confirmed.json
 ```
 
@@ -133,13 +133,13 @@ obligations.
 Inspect an exported program without importing PyTorch:
 
 ```bash
-python3 -m dftcert.cli inspect-pt2 model.pt2
+python3 -m dftcert.legacy.cli inspect-pt2 model.pt2
 ```
 
 Create a pending extraction manifest:
 
 ```bash
-python3 -m dftcert.cli pt2-pending-manifest model.pt2 \
+python3 -m dftcert.legacy.cli pt2-pending-manifest model.pt2 \
   --model-id my-model \
   --input-constraints examples/dft/input-constraints.json \
   --output build/my-model-pending.json
@@ -148,7 +148,7 @@ python3 -m dftcert.cli pt2-pending-manifest model.pt2 \
 Run the extractor:
 
 ```bash
-python3 -m dftcert.cli extract-pt2 model.pt2 \
+python3 -m dftcert.legacy.cli extract-pt2 model.pt2 \
   --output build/model-extraction.json
 ```
 
@@ -162,7 +162,7 @@ field, discontinuity, or self-adjointness.
 Attach a successful controller-owned result with:
 
 ```bash
-python3 -m dftcert.cli apply-extraction \
+python3 -m dftcert.legacy.cli apply-extraction \
   --manifest build/my-model-pending.json \
   --result extractor-result.json \
   --output build/my-model-extracted.json \
@@ -322,7 +322,7 @@ inside bubblewrap.
 The normal WSL command is:
 
 ```bash
-python3 -m dftcert.cli certificate-check \
+python3 -m dftcert.legacy.cli certificate-check \
   --project /path/to/Testv2/project \
   --source policies/lean/DFTArchitectureV1Example.lean \
   --manifest examples/dft/example-manifest.json \

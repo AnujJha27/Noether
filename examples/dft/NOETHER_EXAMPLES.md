@@ -9,7 +9,7 @@ regression and migration; new artifact certification should use Structural V2.
 The canonical example manifest is:
 
 ```bash
-python3 -m dftcert.cli sanity-report \
+python3 -m dftcert.legacy.cli sanity-report \
   --manifest examples/dft/example-manifest.json \
   --proof-results examples/dft/example-proof-results.json
 ```
@@ -20,7 +20,7 @@ The three proof-search obligations are checked against the external
 ## Generate fresh obligations
 
 ```bash
-python3 -m dftcert.cli generate-obligations \
+python3 -m dftcert.legacy.cli generate-obligations \
   --manifest examples/dft/example-manifest.json \
   --jsonl
 ```

@@ -29,7 +29,7 @@ make test
 # Lean proof-search demo
 ./noether demo physics-toy
 
-# DFT policy demo
+# Legacy V1 policy demo
 ./noether demo dft --scenario certified
 ```
 
@@ -69,12 +69,12 @@ certificates trust the human-confirmed interpretation. Both require Lean.
 - [Structural V2 demo commands](STRUCTURAL_V2_DEMOS.md)
 - [Structural V2 workflow and trust model](examples/dft/STRUCTURAL_V2.md)
 - [Structural V2 Torch-to-IR translation specification](STRUCTURAL_V2_TRANSLATION_SPEC.md)
-- [DFT certification prototype](DFT_CERTIFICATION.md)
+- [Legacy DFT V1 prototype](DFT_CERTIFICATION.md)
 - [Reproducibility guide](REPRODUCIBILITY.md)
 - [Contributing](CONTRIBUTING.md)
 
 ## Current scope
 
-This is trusted-local research software. Public or multi-tenant uploads are
-out of scope until the sandboxing work described in
-[DFT_INTEGRATION_PLAN.md](DFT_INTEGRATION_PLAN.md) is complete.
+Structural V2 is the primary workflow: it produces reviewable Lean proofs for
+artifact-backed structural claims or human-confirmed specifications. Legacy V1
+remains available only to reproduce its policy-based prototype results.

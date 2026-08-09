@@ -8,7 +8,7 @@ workflow:
 ```text
 PyTorch .pt2 model -> sandboxed graph extraction --+
                                                    +-> common structural IR
-Natural language -> Qwen draft -> human confirmation+
+Natural language -> LLM draft -> human review+
                                                            |
                                                            v
                                               deterministic IR -> Lean
