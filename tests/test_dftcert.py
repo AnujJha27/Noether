@@ -34,6 +34,7 @@ from dftcert.structural import (
     structural_failure_witnesses,
     validate_translation,
 )
+from dftcert.structural.cli import _atomic_claims
 from dftcert.legacy.pipeline import LocalPipeline, LocalPipelineConfig, LocalRun
 from dftcert.tui import assessment_lines, build_artifact_report, build_hypothesis_report, build_run_inspector, event_summary, render_plain
 from extractors.torch_export_worker import inventory_node
@@ -915,6 +916,21 @@ class StructuralV2Tests(unittest.TestCase):
         self.assertEqual(ir["source"]["kind"], "confirmed_description")
         self.assertEqual(ir["source"]["confirmed_claims"][0]["reviewer_decision"], "confirmed")
         self.assertNotIn("lean_verified", ir["source"]["confirmed_claims"][0])
+
+    def test_atomic_claims_use_relevant_source_spans_when_available(self):
+        description = (
+            "The model has three message-passing layers. "
+            "The self-energy head is constructed as B plus B transpose."
+        )
+        claims = _atomic_claims(
+            {"message_passing": {"depth": 3}, "operator": {"construction": "symmetrized"}},
+            description=description, reviewed=False,
+        )
+        operator = next(item for item in claims if item["property"] == "operator")
+        self.assertEqual(
+            operator["source_text"], "The self-energy head is constructed as B plus B transpose."
+        )
+        self.assertEqual(description[slice(*operator["source_span"])], operator["source_text"])
 
     def test_certificate_rejects_placeholder_proofs(self):
         ir = self.ir()

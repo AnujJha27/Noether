@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import re
 import shlex
 import sys
 from pathlib import Path
@@ -59,12 +60,36 @@ def _write(path: str | Path, value: Any) -> None:
 
 def _atomic_claims(claims: dict[str, Any], *, description: str, reviewed: bool) -> list[dict[str, Any]]:
     """Keep each human-reviewable specification claim separate from the IR blob."""
+    aliases = {
+        "topology": ("topology", "graph", "site", "edge", "ring", "chain", "adjacency"),
+        "message_passing": ("message", "layer", "stage", "depth", "propagation"),
+        "xc": ("xc", "exchange", "correlation", "hinge", "relu", "smooth", "sigmoid", "tanh"),
+        "operator": ("operator", "self-energy", "self energy", "adjoint", "transpose", "symmetr"),
+        "requirements": ("require", "coupling", "reach", "nonlocal"),
+    }
+
+    def source_for(property_name: str) -> tuple[str | None, list[int] | None]:
+        best: tuple[int, int, int] | None = None
+        for match in re.finditer(r"[^.!?]+[.!?]?", description, flags=re.DOTALL):
+            sentence = match.group()
+            score = sum(term in sentence.lower() for term in aliases.get(property_name, ()))
+            if score and (best is None or score > best[0]):
+                best = (score, match.start(), match.end())
+        if best is None:
+            return None, None
+        _, start, end = best
+        while start < end and description[start].isspace():
+            start += 1
+        while end > start and description[end - 1].isspace():
+            end -= 1
+        return description[start:end], [start, end]
+
     return [
         {
             "property": property_name,
             "proposed_value": value,
-            "source_text": description,
-            "source_span": None,
+            "source_text": source_for(property_name)[0],
+            "source_span": source_for(property_name)[1],
             "draft_interpretation": value,
             "reviewer_decision": "confirmed" if reviewed else "pending",
             "final_value": value if reviewed else None,
