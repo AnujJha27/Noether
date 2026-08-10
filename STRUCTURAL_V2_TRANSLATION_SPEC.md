@@ -11,7 +11,7 @@ in that IR.
 | Source | Authority for source → IR | Certificate meaning |
 | --- | --- | --- |
 | Human-reviewed description | The reviewer edits and confirms the proposed claims | Given this confirmed specification, the Lean-checked structural consequences hold |
-| `.pt2` artifact | Sandboxed extractor, reviewed mappings below, node provenance, and translation validation | This exact SHA-256-bound exported artifact exhibits the recognized structures |
+| `.pt2` artifact | Sandboxed extractor, supported semantic rules below, node provenance, and translation validation | This exact SHA-256-bound exported artifact exhibits the recognized structures |
 | Structural IR | Lean kernel | The generated conclusions follow from the encoded finite structure |
 
 Human confirmation is not a proof. A confirmed specification still produces
@@ -74,7 +74,7 @@ Topology requires a non-empty square boolean/integer structural matrix. Every
 truthy entry becomes one directed edge according to the declared convention.
 Message depth stops at the first non-matching or ambiguous stage; unrelated
 matrix multiplications are never counted. An XC or operator graph that matches
-none of the reviewed patterns becomes `unsupported`.
+none of the supported semantic patterns becomes `unsupported`.
 
 Structural V2 does not match an exported model against a finite catalogue of
 reviewed architectures or Lean generation profiles. It recognizes reusable
@@ -90,7 +90,7 @@ pass recomputes those derivations from the raw inventory and constraints, then
 rejects any disagreement between inventory, derivation, and IR.
 
 This is duplicate validation of the derivation, not an independently
-formalized semantics for Torch. The extractor/analyzer and the reviewed mapping
+formalized semantics for Torch. The extractor/analyzer and the supported semantic rules
 table remain in the trusted base. Supporting a new operator therefore requires:
 
 1. updating this specification and the analyzer version;
