@@ -15,7 +15,7 @@ from ..manifest import ManifestError, sha256_value
 
 
 IR_SCHEMA_VERSION = 2
-ANALYZER_VERSION = "dft-structural-analysis-v3"
+ANALYZER_VERSION = "dft-structural-analysis-v4"
 COMPILER_VERSION = "dft-structural-lean-v2"
 POLICY_VERSION = "dft-structural-v2"
 _FORBIDDEN = re.compile(r"\b(sorry|admit|axiom|unsafe)\b")
@@ -38,6 +38,79 @@ _ADJACENCY_CAST_TARGETS = {
 _MESSAGE_TARGETS = {
     "aten.matmul.default", "aten.mm.default", "aten.bmm.default",
 }
+
+
+def _observed_ops(nodes: list[dict[str, Any]]) -> list[str]:
+    return sorted({_target(node) for node in nodes if _target(node)})
+
+
+def _derivation(
+    *, claim: str, value: Any, root: str | None, evidence_nodes: list[str],
+    rule: str, observed_nodes: list[dict[str, Any]], metadata: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Compact, hash-bound explanation for one semantic lowering result."""
+    result = {
+        "claim": claim,
+        "value": value,
+        "root": root,
+        "evidence_nodes": evidence_nodes,
+        "rule": rule,
+        "rule_version": 1,
+        "observed_ops": _observed_ops(observed_nodes),
+    }
+    if metadata:
+        result["metadata"] = metadata
+    return result
+
+
+def _semantic_derivations(
+    *, inventory: dict[str, Any], nodes: list[dict[str, Any]], roles: dict[str, str],
+    input_constraints: dict[str, Any],
+) -> tuple[dict[str, Any], int, list[list[int]], list[str], str]:
+    """Lower raw inventory facts into versioned, provenance-preserving claims."""
+    count, edges, graph_inputs, state_name = _topology(inventory, input_constraints)
+    aliases = _adjacency_aliases(nodes, graph_inputs)
+    stages = _message_chain(nodes, roles["message_state"], graph_inputs)
+    xc_form, xc_nodes = _xc_form(nodes, roles["xc_energy"])
+    operator, operator_nodes = _operator_construction(nodes, roles["learned_self_energy"])
+    by_name = {node.get("name"): node for node in nodes if isinstance(node.get("name"), str)}
+    stage_graph = [by_name[name] for name in stages]
+    xc_graph = _ancestors(nodes, roles["xc_energy"])
+    operator_graph = _ancestors(nodes, roles["learned_self_energy"])
+    topology_graph = [by_name[name] for name in aliases if name in by_name]
+    derivations = {
+        "topology": _derivation(
+            claim="topology.adjacency", value={"site_count": count, "directed_edges": edges},
+            root=state_name, evidence_nodes=aliases, rule="topology.adjacency_state",
+            observed_nodes=topology_graph,
+            metadata={"state_name": state_name, "graph_inputs": graph_inputs,
+                      "adjacency_convention": input_constraints.get("adjacency_convention", "target_source")},
+        ),
+        "message_passing": _derivation(
+            claim="message_passing.depth", value=len(stages), root=roles["message_state"],
+            evidence_nodes=stages, rule="message.adjacency_fed_matmul",
+            observed_nodes=stage_graph, metadata={"stages": stages},
+        ),
+        "xc": _derivation(
+            claim="xc.form", value=xc_form, root=roles["xc_energy"],
+            evidence_nodes=xc_nodes,
+            rule={"hinge": "xc.hinge_activation", "smooth": "xc.smooth_activation"}.get(xc_form, "xc.unrecognized_composition"),
+            observed_nodes=xc_graph,
+            metadata=({"reason": "no supported hinge or smooth activation"} if xc_form == "unsupported" else None),
+        ),
+        "operator": _derivation(
+            claim="operator.construction", value=operator, root=roles["learned_self_energy"],
+            evidence_nodes=operator_nodes,
+            rule={
+                "zero": "operator.zero_root", "identity": "operator.identity_root",
+                "symmetrized": "operator.add_adjoint_pair",
+                "unconstrained_parameter": "operator.unconstrained_root",
+            }.get(operator, "operator.unrecognized_composition"),
+            observed_nodes=operator_graph,
+            metadata=({"reason": "unrecognized operator composition"} if operator == "unsupported" else None),
+        ),
+    }
+    return derivations, count, edges, graph_inputs, state_name
 
 
 def _refs(value: Any) -> list[str]:
@@ -240,11 +313,13 @@ def structural_ir_from_inventory(
     if not isinstance(nodes, list) or any(not isinstance(node, dict) for node in nodes):
         raise ManifestError("artifact graph inventory is malformed")
     roles = _role_roots(nodes, input_constraints)
-    site_count, edges, topology_nodes, adjacency_state = _topology(inventory, input_constraints)
-    stage_nodes = _message_chain(nodes, roles["message_state"], topology_nodes)
-    depth = len(stage_nodes)
-    xc_form, xc_nodes = _xc_form(nodes, roles["xc_energy"])
-    operator, operator_nodes = _operator_construction(nodes, roles["learned_self_energy"])
+    derivations, site_count, edges, topology_nodes, adjacency_state = _semantic_derivations(
+        inventory=inventory, nodes=nodes, roles=roles, input_constraints=input_constraints,
+    )
+    stage_nodes = derivations["message_passing"]["evidence_nodes"]
+    depth = derivations["message_passing"]["value"]
+    xc_form, xc_nodes = derivations["xc"]["value"], derivations["xc"]["evidence_nodes"]
+    operator, operator_nodes = derivations["operator"]["value"], derivations["operator"]["evidence_nodes"]
     requirements = input_constraints.get("required_couplings", [])
     if not isinstance(requirements, list) or any(
         not isinstance(item, dict)
@@ -267,7 +342,7 @@ def structural_ir_from_inventory(
         if isinstance(name, str) and isinstance(value, dict)
     } if isinstance(state, dict) else {}
     translation = {
-        "schema_version": 1,
+        "schema_version": 2,
         "inventory_sha256": inventory_sha256,
         "roles": roles,
         "topology": {
@@ -279,6 +354,7 @@ def structural_ir_from_inventory(
         "message_passing": {"root": roles["message_state"], "stages": stage_nodes},
         "xc": {"root": roles["xc_energy"], "form": xc_form},
         "operator": {"root": roles["learned_self_energy"], "construction": operator},
+        "semantic_derivations": derivations,
     }
     value = {
         "ir_schema_version": IR_SCHEMA_VERSION,
@@ -372,7 +448,7 @@ def validate_translation(
     if value["source"]["kind"] != "torch_export":
         raise ManifestError("only exported artifacts have a translation derivation")
     translation = value["translation"]
-    if translation.get("schema_version") != 1:
+    if translation.get("schema_version") != 2:
         raise ManifestError("unsupported translation derivation schema")
     if translation.get("inventory_sha256") != sha256_value(inventory):
         raise ManifestError("translation derivation is bound to a different inventory")
@@ -382,7 +458,11 @@ def validate_translation(
     roles = _role_roots(nodes, input_constraints)
     if translation.get("roles") != roles:
         raise ManifestError("translation output roles do not match the raw exported graph")
-    count, edges, graph_inputs, state_name = _topology(inventory, input_constraints)
+    derivations, count, edges, graph_inputs, state_name = _semantic_derivations(
+        inventory=inventory, nodes=nodes, roles=roles, input_constraints=input_constraints,
+    )
+    if translation.get("semantic_derivations") != derivations:
+        raise ManifestError("translation semantic derivations do not match the raw exported graph")
     topology = translation.get("topology")
     if topology != {
         "state_name": state_name,
@@ -391,17 +471,17 @@ def validate_translation(
         "adjacency_convention": input_constraints.get("adjacency_convention", "target_source"),
     } or value["topology"]["site_count"] != count or value["topology"]["directed_edges"] != edges:
         raise ManifestError("translation topology claim does not match its adjacency evidence")
-    stages = _message_chain(nodes, roles["message_state"], graph_inputs)
+    stages = derivations["message_passing"]["evidence_nodes"]
     if translation.get("message_passing") != {"root": roles["message_state"], "stages": stages}:
         raise ManifestError("translation message-passing derivation is invalid")
     if value["message_passing"] != {"depth": len(stages), "provenance_nodes": stages}:
         raise ManifestError("IR message-passing claim does not match its derivation")
-    xc_form, xc_nodes = _xc_form(nodes, roles["xc_energy"])
+    xc_form, xc_nodes = derivations["xc"]["value"], derivations["xc"]["evidence_nodes"]
     if translation.get("xc") != {"root": roles["xc_energy"], "form": xc_form}:
         raise ManifestError("translation XC derivation is invalid")
     if value["xc"] != {"form": xc_form, "provenance_nodes": xc_nodes}:
         raise ManifestError("IR XC claim does not match its derivation")
-    operator, operator_nodes = _operator_construction(nodes, roles["learned_self_energy"])
+    operator, operator_nodes = derivations["operator"]["value"], derivations["operator"]["evidence_nodes"]
     if translation.get("operator") != {
         "root": roles["learned_self_energy"], "construction": operator,
     }:
@@ -412,7 +492,7 @@ def validate_translation(
         "status": "translation_validated",
         "translation_sha256": sha256_value(translation),
         "inventory_sha256": sha256_value(inventory),
-        "checked_claims": ["output_roles", "topology", "message_passing", "xc", "operator"],
+        "checked_claims": ["output_roles", "topology", "message_passing", "xc", "operator", "semantic_derivations"],
     }
 
 
@@ -824,6 +904,7 @@ def verify_structural_certificate(
 def confirmed_description_ir(
     *, description: str, topology: dict[str, Any], message_passing: dict[str, Any],
     xc: dict[str, Any], operator: dict[str, Any], requirements: dict[str, Any],
+    confirmed_claims: list[dict[str, Any]] | None = None,
 ) -> dict[str, Any]:
     description_hash = hashlib.sha256(description.encode()).hexdigest()
     value = {
@@ -837,7 +918,9 @@ def confirmed_description_ir(
                 "xc": xc,
                 "operator": operator,
                 "requirements": requirements,
+                "confirmed_claims": confirmed_claims or [],
             }),
+            "confirmed_claims": confirmed_claims or [],
         },
         "topology": topology,
         "message_passing": message_passing,

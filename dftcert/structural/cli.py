@@ -57,6 +57,23 @@ def _write(path: str | Path, value: Any) -> None:
     )
 
 
+def _atomic_claims(claims: dict[str, Any], *, description: str, reviewed: bool) -> list[dict[str, Any]]:
+    """Keep each human-reviewable specification claim separate from the IR blob."""
+    return [
+        {
+            "property": property_name,
+            "proposed_value": value,
+            "source_text": description,
+            "source_span": None,
+            "draft_interpretation": value,
+            "reviewer_decision": "confirmed" if reviewed else "pending",
+            "final_value": value if reviewed else None,
+            "provenance": "human_confirmation" if reviewed else "llm_draft",
+        }
+        for property_name, value in claims.items()
+    ]
+
+
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(
         prog="noether structural", description="Artifact-grounded Structural V2 workflow"
@@ -170,6 +187,7 @@ def main(argv: list[str] | None = None) -> int:
                 "authoritative": False,
                 "description": description,
                 "proposed_claims": proposal,
+                "atomic_claims": _atomic_claims(proposal, description=description, reviewed=False),
             }
             _write(options.output, draft)
             output = {"status": "draft", "output": str(Path(options.output).resolve())}
@@ -184,7 +202,11 @@ def main(argv: list[str] | None = None) -> int:
             )
             if not isinstance(description, str) or not isinstance(claims, dict):
                 raise ManifestError("draft is missing its description or proposed claims")
-            ir = confirmed_description_ir(description=description, **claims)
+            ir = confirmed_description_ir(
+                description=description,
+                confirmed_claims=_atomic_claims(claims, description=description, reviewed=True),
+                **claims,
+            )
             _write(options.output, ir)
             output = {
                 "status": "confirmed_specification",

@@ -778,6 +778,42 @@ class StructuralV2Tests(unittest.TestCase):
         with self.assertRaises(ManifestError):
             validate_translation(inventory=inventory, value=ir, input_constraints=self.constraints())
 
+    def test_semantic_derivations_are_provenance_preserving_and_rechecked(self):
+        inventory = self.inventory()
+        ir = structural_ir_from_inventory(
+            inventory=inventory, artifact_sha256="artifact", extractor_version="test",
+            input_constraints=self.constraints(),
+        )
+        derivations = ir["translation"]["semantic_derivations"]
+        operator = derivations["operator"]
+        self.assertEqual(operator["value"], "symmetrized")
+        self.assertEqual(operator["rule"], "operator.add_adjoint_pair")
+        self.assertEqual(operator["root"], "add")
+        self.assertEqual(operator["evidence_nodes"], ["add", "numpy_t", "p_base"])
+        self.assertIn("aten.add.tensor", operator["observed_ops"])
+        self.assertEqual(derivations["xc"]["rule"], "xc.hinge_activation")
+        self.assertEqual(derivations["message_passing"]["value"], 3)
+        self.assertEqual(
+            derivations["message_passing"]["evidence_nodes"],
+            ["matmul_2", "matmul_1", "matmul"],
+        )
+        ir["translation"]["semantic_derivations"]["operator"]["rule"] = "operator.fake"
+        with self.assertRaises(ManifestError):
+            validate_translation(inventory=inventory, value=ir, input_constraints=self.constraints())
+
+    def test_unsupported_derivation_explains_observed_composition(self):
+        inventory = self.inventory()
+        inventory["nodes"][8]["target"] = "aten.mul.Tensor"
+        ir = structural_ir_from_inventory(
+            inventory=inventory, artifact_sha256="artifact", extractor_version="test",
+            input_constraints=self.constraints(),
+        )
+        operator = ir["translation"]["semantic_derivations"]["operator"]
+        self.assertEqual(operator["value"], "unsupported")
+        self.assertEqual(operator["rule"], "operator.unrecognized_composition")
+        self.assertEqual(operator["metadata"]["reason"], "unrecognized operator composition")
+        self.assertIn("aten.mul.tensor", operator["observed_ops"])
+
     def test_translation_uses_only_reviewed_torch_patterns(self):
         def translate(inventory):
             return structural_ir_from_inventory(
@@ -861,6 +897,24 @@ class StructuralV2Tests(unittest.TestCase):
         self.assertEqual(report["certificate_kind"], "confirmed_specification")
         self.assertIn(generated["source_sha256"], source)
         self.assertIn(generated["ir_sha256"], source)
+
+    def test_confirmed_claims_are_separate_from_proof_authority(self):
+        ir = confirmed_description_ir(
+            description="three message-passing stages",
+            topology=self.ir()["topology"], message_passing=self.ir()["message_passing"],
+            xc=self.ir()["xc"], operator=self.ir()["operator"],
+            requirements=self.ir()["requirements"],
+            confirmed_claims=[{
+                "property": "message_passing",
+                "proposed_value": {"depth": 3},
+                "reviewer_decision": "confirmed",
+                "final_value": {"depth": 3},
+                "provenance": "human_confirmation",
+            }],
+        )
+        self.assertEqual(ir["source"]["kind"], "confirmed_description")
+        self.assertEqual(ir["source"]["confirmed_claims"][0]["reviewer_decision"], "confirmed")
+        self.assertNotIn("lean_verified", ir["source"]["confirmed_claims"][0])
 
     def test_certificate_rejects_placeholder_proofs(self):
         ir = self.ir()

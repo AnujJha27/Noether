@@ -1,7 +1,7 @@
 # Structural V2 translation specification
 
-This document defines the reviewed translation implemented by
-`dftcert.structural.core` (`dft-structural-analysis-v3`). It is part of the
+This document defines the deterministic semantic-lowering rules implemented by
+`dftcert.structural.core` (`dft-structural-analysis-v4`). It is part of the
 trusted research surface: Lean proves consequences of the Structural IR, while
 this translation determines what an exported Torch graph is allowed to assert
 in that IR.
@@ -50,11 +50,14 @@ operator names:
 The constraints are part of the translation derivation and IR hash. An invalid,
 missing, or incomplete contract is rejected rather than guessed.
 
-## Exact Torch-to-IR mappings
+## Graph facts to semantic derivations
 
-Targets are lower-cased and matched exactly. Unlisted spellings, custom
-operators, and future Torch variants are `unsupported` until reviewed and
-added with tests.
+Inspection first records raw node operations and references. Semantic lowering
+then applies the named rule below and emits a compact derivation record:
+`claim`, `value`, `root`, `evidence_nodes`, `rule`,
+`rule_version`, and `observed_ops`. Targets are lower-cased and matched
+exactly. Unlisted spellings, custom operators, and future Torch variants fail
+closed as `unsupported` with the observed operations and missing rule.
 
 | Structural claim | Accepted exported target or pattern | IR value and assumption |
 | --- | --- | --- |
@@ -73,13 +76,18 @@ Message depth stops at the first non-matching or ambiguous stage; unrelated
 matrix multiplications are never counted. An XC or operator graph that matches
 none of the reviewed patterns becomes `unsupported`.
 
+Structural V2 does not match an exported model against a finite catalogue of
+reviewed architectures or Lean generation profiles. It recognizes reusable
+semantic constructions over graph operations, then deterministically compiles
+the resulting common IR into generic Lean obligations.
+
 ## Translation validation and provenance
 
 Artifact IR creation records the raw inventory hash, output roots, adjacency
-state and aliases, consecutive message-stage nodes, XC root/form, operator
-root/construction, and provenance nodes. A second deterministic validation pass
-recomputes those claims from the raw inventory and constraints, then rejects
-any disagreement between inventory, derivation, and IR.
+state and aliases, and one versioned semantic derivation for topology, message
+depth, XC form, and operator construction. A second deterministic validation
+pass recomputes those derivations from the raw inventory and constraints, then
+rejects any disagreement between inventory, derivation, and IR.
 
 This is duplicate validation of the derivation, not an independently
 formalized semantics for Torch. The extractor/analyzer and the reviewed mapping
