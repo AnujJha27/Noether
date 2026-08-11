@@ -512,6 +512,19 @@ class ExtractorSandboxTests(unittest.TestCase):
             self.assertEqual(result["sandbox_attestation"]["network"], "unshared")
             self.assertEqual(result["facts"], {})
 
+    def test_conda_python_is_mounted_read_only_as_runtime(self):
+        fake = ROOT / "tests/fake_bwrap.py"
+        with tempfile.TemporaryDirectory() as directory:
+            artifact = self.artifact(directory)
+            python = pathlib.Path(directory) / "env" / "bin" / "python3"
+            python.parent.mkdir(parents=True)
+            python.touch()
+            command = BubblewrapExtractor(
+                bubblewrap=str(fake), python=str(python), app_root=ROOT
+            ).command(artifact)
+            self.assertIn("/runtime", command)
+            self.assertIn("/runtime/bin/python3", command)
+
     def test_inventory_normalizes_graph_nodes_without_torch(self):
         class Node:
             name = "add"

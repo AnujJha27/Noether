@@ -19,7 +19,7 @@ from .security import sign_attestation
 class SandboxLimits:
     wall_time_s: int = 30
     cpu_time_s: int = 20
-    memory_mb: int = 2048
+    memory_mb: int = 4096
     max_processes: int = 32
     max_output_bytes: int = 2 * 1024 * 1024
 
@@ -61,6 +61,14 @@ class BubblewrapExtractor:
                 arguments.extend(["--ro-bind", directory, directory])
         return arguments
 
+    def _sandbox_python(self) -> tuple[list[str], str]:
+        python = Path(self.python).resolve()
+        system_roots = tuple(Path(path) for path in ("/usr", "/usr/local", "/lib", "/lib64", "/bin"))
+        if any(python.is_relative_to(root) for root in system_roots):
+            return [], str(python)
+        runtime = python.parent.parent
+        return ["--ro-bind", str(runtime), "/runtime"], "/runtime/bin/python3"
+
     def command(self, artifact: str | Path) -> list[str]:
         artifact_path = Path(artifact).resolve()
         executable = shutil.which(self.bubblewrap)
@@ -68,6 +76,7 @@ class BubblewrapExtractor:
             raise SandboxUnavailable(
                 "bubblewrap is unavailable; refusing to deserialize an uploaded PT2 artifact"
             )
+        python_bind, sandbox_python = self._sandbox_python()
         return [
             executable,
             "--unshare-all",
@@ -75,15 +84,18 @@ class BubblewrapExtractor:
             "--new-session",
             "--clearenv",
             *self._runtime_binds(),
+            *python_bind,
             "--ro-bind", str(self.app_root), "/app",
             "--ro-bind", str(artifact_path), "/input/model.pt2",
             "--tmpfs", "/tmp",
             "--proc", "/proc",
             "--dev", "/dev",
             "--chdir", "/app",
-            "--setenv", "PATH", "/usr/local/bin:/usr/bin:/bin",
+            "--setenv", "PATH", "/runtime/bin:/usr/local/bin:/usr/bin:/bin",
+            "--setenv", "LD_LIBRARY_PATH", "/runtime/lib:/runtime/lib64",
+            "--setenv", "OPENBLAS_NUM_THREADS", "1",
             "--setenv", "PYTHONPATH", "/app",
-            self.python,
+            sandbox_python,
             "/app/extractors/torch_export_worker.py",
             "/input/model.pt2",
         ]
