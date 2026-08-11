@@ -1,7 +1,7 @@
 # Structural V2 translation specification
 
 This document defines the deterministic semantic-lowering rules implemented by
-`dftcert.structural.core` (`dft-structural-analysis-v4`). It is part of the
+`dftcert.structural.core` (`dft-structural-analysis-v5`). It is part of the
 trusted research surface: Lean proves consequences of the Structural IR, while
 this translation determines what an exported Torch graph is allowed to assert
 in that IR.
@@ -61,11 +61,11 @@ closed as `unsupported` with the observed operations and missing rule.
 
 | Structural claim | Accepted exported target or pattern | IR value and assumption |
 | --- | --- | --- |
-| Adjacency cast alias | `aten.to.dtype`, `aten._to_copy.default`, `prims.convert_element_type.default` with exactly one reference to the adjacency state or an existing alias | The result may feed message passing as the same adjacency relation |
-| Message-passing stage | `aten.matmul.default`, `aten.mm.default`, or `aten.bmm.default`, with exactly one adjacency reference and one previous-state reference | One consecutive adjacency-fed stage; depth is the chain length traced backward from `message_state` |
-| Hinge XC | An ancestor of `xc_energy` is `aten.relu.default`, `aten.clamp_min.default`, or `aten.maximum.default` | `xc.form = hinge`; the architecture contains a recognized nonsmooth hinge construction |
-| Smooth XC | No hinge ancestor exists and an ancestor is `aten.sigmoid.default`, `aten.softplus.default`, or `aten.tanh.default` | `xc.form = smooth`; this mapping does not support the required discontinuity |
-| Zero operator | `learned_self_energy` root target is `aten.zeros.default` or `aten.zero.default` | `operator.construction = zero`, structurally self-adjoint |
+| Adjacency alias | `aten.to.dtype`, `aten._to_copy.default`, `prims.convert_element_type.default`, `aten.alias.default`, `aten.clone.default`, `aten.contiguous.default`, or `aten.detach.default`, with exactly one reference to the adjacency state or an existing alias | The result may feed message passing as the same adjacency relation |
+| Message-passing stage | `aten.matmul.default`, `aten.mm.default`, `aten.bmm.default`, or `aten.mv.default`, with exactly one adjacency reference and one previous-state reference | One consecutive adjacency-fed stage; depth is the chain length traced backward from `message_state` |
+| Hinge XC | An ancestor of `xc_energy` is `aten.relu.default`, `aten.leaky_relu.default`, `aten.clamp_min.default`, `aten.maximum.default`, `aten.abs.default`, or `aten.hardtanh.default` | `xc.form = hinge`; the architecture contains a recognized nonsmooth hinge construction |
+| Smooth XC | No hinge ancestor exists and an ancestor is `aten.sigmoid.default`, `aten.softplus.default`, `aten.tanh.default`, `aten.silu.default`, or `aten.gelu.default` | `xc.form = smooth`; this mapping does not support the required discontinuity |
+| Zero operator | `learned_self_energy` root target is `aten.zeros.default`, `aten.zeros_like.default`, or `aten.zero.default` | `operator.construction = zero`, structurally self-adjoint |
 | Identity operator | Root target is `aten.eye.default` | `operator.construction = identity`, structurally self-adjoint |
 | Symmetrized operator | Root is `aten.add.Tensor`; one operand is a direct base reference and the other is `aten.transpose.int`, `aten.permute.default`, `aten.t.default`, or `aten.numpy_T.default` applied directly to the same base | `operator.construction = symmetrized`, interpreted as a `B + Bᵀ` construction |
 | Unconstrained operator | Root node kind is `placeholder` or `get_attr` | `operator.construction = unconstrained_parameter`; no self-adjointness guarantee |

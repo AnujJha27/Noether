@@ -15,11 +15,13 @@ from ..manifest import ManifestError, sha256_value
 
 
 IR_SCHEMA_VERSION = 2
-ANALYZER_VERSION = "dft-structural-analysis-v4"
+ANALYZER_VERSION = "dft-structural-analysis-v5"
 COMPILER_VERSION = "dft-structural-lean-v2"
 POLICY_VERSION = "dft-structural-v2"
 _FORBIDDEN = re.compile(r"\b(sorry|admit|axiom|unsafe)\b")
-_ZERO_TARGETS = {"aten.zeros.default", "aten.zero.default"}
+_ZERO_TARGETS = {
+    "aten.zeros.default", "aten.zeros_like.default", "aten.zero.default",
+}
 _IDENTITY_TARGETS = {"aten.eye.default"}
 _ADD_TARGETS = {"aten.add.tensor"}
 _ADJOINT_TARGETS = {
@@ -27,16 +29,20 @@ _ADJOINT_TARGETS = {
     "aten.numpy_t.default",
 }
 _HINGE_TARGETS = {
-    "aten.relu.default", "aten.clamp_min.default", "aten.maximum.default",
+    "aten.relu.default", "aten.leaky_relu.default", "aten.clamp_min.default",
+    "aten.maximum.default", "aten.abs.default", "aten.hardtanh.default",
 }
 _SMOOTH_TARGETS = {
     "aten.sigmoid.default", "aten.softplus.default", "aten.tanh.default",
+    "aten.silu.default", "aten.gelu.default",
 }
-_ADJACENCY_CAST_TARGETS = {
+_ADJACENCY_ALIAS_TARGETS = {
     "aten.to.dtype", "aten._to_copy.default", "prims.convert_element_type.default",
+    "aten.alias.default", "aten.clone.default", "aten.contiguous.default",
+    "aten.detach.default",
 }
 _MESSAGE_TARGETS = {
-    "aten.matmul.default", "aten.mm.default", "aten.bmm.default",
+    "aten.matmul.default", "aten.mm.default", "aten.bmm.default", "aten.mv.default",
 }
 
 
@@ -203,7 +209,7 @@ def _adjacency_aliases(nodes: list[dict[str, Any]], adjacency_inputs: list[str])
         additions = {
             node["name"] for node in nodes
             if isinstance(node.get("name"), str)
-            and _has_target([node], _ADJACENCY_CAST_TARGETS)
+            and _has_target([node], _ADJACENCY_ALIAS_TARGETS)
             and len(_refs(node.get("args"))) == 1
             and _refs(node.get("args"))[0] in aliases
         }

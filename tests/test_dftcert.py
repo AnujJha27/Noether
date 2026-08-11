@@ -824,7 +824,12 @@ class StructuralV2Tests(unittest.TestCase):
 
         for target, expected in (
             ("aten.relu.default", "hinge"),
+            ("aten.leaky_relu.default", "hinge"),
+            ("aten.abs.default", "hinge"),
+            ("aten.hardtanh.default", "hinge"),
             ("aten.sigmoid.default", "smooth"),
+            ("aten.silu.default", "smooth"),
+            ("aten.gelu.default", "smooth"),
             ("custom.relu_like", "unsupported"),
         ):
             inventory = self.inventory()
@@ -833,6 +838,7 @@ class StructuralV2Tests(unittest.TestCase):
 
         for target, expected in (
             ("aten.zeros.default", "zero"),
+            ("aten.zeros_like.default", "zero"),
             ("aten.eye.default", "identity"),
             ("custom.zeros_like", "unsupported"),
         ):
@@ -840,16 +846,33 @@ class StructuralV2Tests(unittest.TestCase):
             inventory["nodes"][8]["target"] = target
             self.assertEqual(translate(inventory)["operator"]["construction"], expected)
 
-        inventory = copy.deepcopy(self.inventory())
-        ref = lambda name: {"node": name}
-        inventory["nodes"].insert(3, {
-            "name": "adjacency_cast", "op": "call_function",
-            "target": "aten.to.dtype", "args": [ref("b_adjacency")], "kwargs": {},
-        })
-        for node in inventory["nodes"]:
-            if node["name"].startswith("matmul"):
-                node["args"][0] = ref("adjacency_cast")
-        self.assertEqual(translate(inventory)["message_passing"]["depth"], 3)
+        for target in (
+            "aten.to.dtype", "aten._to_copy.default", "prims.convert_element_type.default",
+            "aten.alias.default", "aten.clone.default", "aten.contiguous.default",
+            "aten.detach.default",
+        ):
+            inventory = copy.deepcopy(self.inventory())
+            ref = lambda name: {"node": name}
+            inventory["nodes"].insert(3, {
+                "name": "adjacency_alias", "op": "call_function", "target": target,
+                "args": [ref("b_adjacency")], "kwargs": {},
+            })
+            for node in inventory["nodes"]:
+                if node["name"].startswith("matmul"):
+                    node["args"][0] = ref("adjacency_alias")
+            self.assertEqual(translate(inventory)["message_passing"]["depth"], 3)
+
+        for target in ("aten.matmul.default", "aten.mm.default", "aten.bmm.default", "aten.mv.default"):
+            inventory = self.inventory()
+            inventory["nodes"][5]["target"] = target
+            self.assertEqual(translate(inventory)["message_passing"]["depth"], 3)
+
+        inventory = self.inventory()
+        inventory["nodes"][3]["target"] = "custom.alias"
+        self.assertEqual(translate(inventory)["message_passing"]["depth"], 2)
+        inventory = self.inventory()
+        inventory["nodes"][5]["target"] = "custom.matmul"
+        self.assertEqual(translate(inventory)["message_passing"]["depth"], 0)
 
     def ir(self, *, depth=3, xc="hinge", operator="symmetrized"):
         return confirmed_description_ir(
