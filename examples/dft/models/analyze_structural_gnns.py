@@ -13,7 +13,7 @@ from extractors.torch_export_worker import extract
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Analyze exported Noether V2 demo models")
+    parser = argparse.ArgumentParser(description="Analyze exported VISTA V2 demo models")
     parser.add_argument("model_dir")
     parser.add_argument(
         "--constraints",

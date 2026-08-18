@@ -1,7 +1,7 @@
 [project]
-name = "noether"
+name = "vista"
 version = "0.1.0"
-description = "Lean proof-search verifier and DFT architecture certification research prototype"
+description = "VISTA Lean proof-search verifier and DFT architecture certification research prototype"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { file = "LICENSE" }
@@ -25,6 +25,8 @@ noether-dftcert = "dftcert.legacy.cli:main"
 noether-orchestrator = "orchestrator.cli:main"
 noether-replay = "orchestrator.replay:main"
 noether-tui = "dftcert.tui:main"
+vista = "dftcert.local_cli:main"
+vista-structural = "dftcert.structural.cli:main"
 
 [tool.setuptools]
 packages = ["dftcert", "dftcert.legacy", "dftcert.structural", "orchestrator", "extractors"]

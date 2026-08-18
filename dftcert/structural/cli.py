@@ -101,7 +101,7 @@ def _atomic_claims(claims: dict[str, Any], *, description: str, reviewed: bool) 
 
 def parser() -> argparse.ArgumentParser:
     root = argparse.ArgumentParser(
-        prog="noether structural", description="Artifact-grounded Structural V2 workflow"
+        prog="vista structural", description="Artifact-grounded VISTA Structural V2 workflow"
     )
     commands = root.add_subparsers(dest="command", required=True)
 

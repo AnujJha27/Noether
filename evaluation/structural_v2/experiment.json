@@ -1,0 +1,10 @@
+{
+  "experiment": "VISTA Structural V2 corpus", "condition_version": 1,
+  "frozen_revision": "0ea23bfa423840aea402ffa55dc4a6f3f6f5fcff",
+  "structural_ir_schema_version": 2,
+  "semantic_rules": {"topology.adjacency_state":1,"message.adjacency_fed_matmul":1,"xc.hinge_activation":1,"xc.smooth_activation":1,"xc.unrecognized_composition":1,"operator.zero_root":1,"operator.identity_root":1,"operator.add_adjoint_pair":1,"operator.unconstrained_root":1,"operator.unrecognized_composition":1},
+  "analyzer_version": "dft-structural-analysis-v5", "extractor_version": "torch-export-inventory-v2", "policy_version": "dft-structural-v2", "compiler_version": "dft-structural-lean-v2",
+  "lean_project": {"path":"lean","toolchain":"leanprover/lean4:v4.31.0","identity":"proof-search@0.1.0"},
+  "environment": {"python":"recorded by runner environment","pytorch":"recorded by extractor","platform":"recorded by runner environment","export":"torch.export.save(.pt2)"},
+  "integrity": "Changing a semantic rule after inspecting this corpus requires a new condition_version and preserves prior result bundles."
+}

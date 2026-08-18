@@ -28,7 +28,7 @@ MODELS = {
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Export Noether Structural V2 demo models")
+    parser = argparse.ArgumentParser(description="Export VISTA Structural V2 demo models")
     parser.add_argument("--output-dir", default="build/structural-v2-models")
     options = parser.parse_args()
     output = Path(options.output_dir)
